@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Unmatched Ego Checker</title>
+<meta name="description" content="Online ranked bragging battles. Type sentences about yourself, earn ego points, and try to get anywhere near Dempsey.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shrikhand&family=Familjen+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a velvet "throne room" arena. Lobby = ego card + leaderboard + match feed; Match = head-to-head HUD with tug-of-war bar; Result = big verdict. Single deliberate dark look. */
+:root {
+  --bg: #140a1b;
+  --panel: #211230;
+  --panel2: #2a183b;
+  --line: #3d2650;
+  --fg: #f7eefb;
+  --muted: #b49dc4;
+  --gold: #f5c451;
+  --gold-deep: #a8700f;
+  --pink: #ff5c8a;
+  --violet: #8f7bff;
+  --good: #7be0a6;
+  --bad: #ff8f6b;
+  --display: "Shrikhand", Georgia, serif;
+  --body: "Familjen Grotesk", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body {
+  font-family: var(--body); font-size: 16px; line-height: 1.5;
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 480px at 50% -160px, #44194f 0%, transparent 70%),
+    radial-gradient(700px 400px at 100% 100%, #2a1240 0%, transparent 70%),
+    var(--bg);
+}
+#sky, #fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#sky { z-index: 0; }
+#fx { z-index: 50; }
+.app {
+  position: relative; z-index: 1;
+  max-width: 1080px; margin: 0 auto;
+  padding-block: max(24px, env(safe-area-inset-top, 0px)) 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 28px;
+}
+
+/* Header */
+.top { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.brand svg { width: 52px; height: 52px; flex: none; filter: drop-shadow(0 4px 12px rgba(245,196,81,.35)); }
+.brand h1 {
+  margin: 0; font-family: var(--display); font-weight: 400; line-height: .95;
+  font-size: clamp(28px, 6vw, 46px);
+  background: linear-gradient(180deg, #fff3c9 0%, var(--gold) 55%, #d98f1c 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(3px 3px 0 var(--pink));
+  text-wrap: balance;
+}
+.pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .06em;
+  padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel);
+  color: var(--muted); white-space: nowrap;
+}
+.pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pill[data-state="online"] i { background: var(--good); box-shadow: 0 0 0 4px rgba(123,224,166,.18); }
+.pill[data-state="connecting"] i { background: var(--gold); animation: blink 1s infinite; }
+.pill[data-state="offline"] i { background: var(--bad); }
+@keyframes blink { 50% { opacity: .3; } }
+
+/* Shared */
+.panel {
+  background: linear-gradient(180deg, var(--panel2), var(--panel));
+  border: 1px solid var(--line); border-radius: 18px;
+  padding: 22px; display: flex; flex-direction: column; gap: 16px; min-width: 0;
+  box-shadow: 0 20px 50px -30px rgba(0,0,0,.8);
+}
+.cap { font-family: var(--mono); font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+h2.sec { margin: 0; font-family: var(--display); font-weight: 400; font-size: 24px; color: var(--fg); line-height: 1.1; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+button { font: inherit; cursor: pointer; border-radius: 12px; border: 2px solid transparent; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.btn-gold {
+  background: linear-gradient(180deg, #ffe08a, var(--gold)); color: #2a1503;
+  font-weight: 700; font-size: 17px; padding: 14px 22px;
+  box-shadow: 0 5px 0 var(--gold-deep), 0 12px 30px -10px rgba(245,196,81,.6);
+  transition: transform .08s, box-shadow .08s;
+}
+.btn-gold:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 1px 0 var(--gold-deep); }
+.btn-line { background: transparent; color: var(--fg); border-color: var(--line); padding: 12px 18px; font-weight: 500; }
+.btn-line:hover:not(:disabled) { border-color: var(--muted); }
+.btn-small { padding: 7px 12px; font-size: 14px; border-radius: 10px; }
+
+/* Lobby */
+.lobby { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.lede { margin: 0; color: var(--muted); max-width: 62ch; }
+.lede b { color: var(--fg); font-weight: 500; }
+.name-row { display: flex; flex-direction: column; gap: 6px; }
+.name-row input {
+  font: inherit; font-size: 18px; font-weight: 500; color: var(--fg);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%;
+}
+.rating-big { display: flex; align-items: baseline; gap: 10px; }
+.rating-big .num { font-size: 48px; font-weight: 700; color: var(--gold); line-height: 1; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.stat .num { font-size: 16px; font-weight: 700; }
+.actions { display: flex; flex-direction: column; gap: 10px; }
+.right { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th { text-align: left; font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 0 10px 8px; }
+td { padding: 10px; border-top: 1px solid var(--line); }
+th.r, td.r { text-align: right; }
+td.rk { width: 44px; font-family: var(--mono); color: var(--muted); }
+tr.top1 td.rk { color: var(--gold); } tr.top2 td.rk { color: #d9d4e6; } tr.top3 td.rk { color: #e3a46a; }
+tr.you td { background: rgba(245,196,81,.08); }
+.you-tag { font-family: var(--mono); font-size: 10.5px; color: var(--gold); border: 1px solid var(--gold); border-radius: 6px; padding: 1px 5px; margin-left: 6px; vertical-align: 2px; }
+.empty { color: var(--muted); margin: 0; font-size: 15px; }
+.feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.fm { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 4px 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.fm:first-child { border-top: 0; }
+.fm .side { min-width: 0; display: flex; flex-direction: column; }
+.fm .side.b { text-align: right; }
+.fm .nm { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm .sc { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.fm .won .nm { color: var(--gold); }
+.fm .vs { font-family: var(--display); color: var(--pink); font-size: 18px; }
+.fm .meta { grid-column: 1 / -1; font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: center; }
+.rules { color: var(--muted); font-size: 14.5px; }
+.rules summary { cursor: pointer; color: var(--fg); font-weight: 500; }
+.rules ul { padding-left: 20px; margin: 10px 0 0; display: flex; flex-direction: column; gap: 4px; }
+
+/* Match */
+.hud { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 16px; }
+.fighter { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fighter.opp { text-align: right; align-items: flex-end; }
+.fighter .nm { font-family: var(--display); font-size: clamp(20px, 4vw, 28px); line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.fighter.me .nm { color: var(--pink); }
+.fighter.opp .nm { color: var(--violet); }
+.fighter .score { font-family: var(--mono); font-weight: 700; font-size: clamp(28px, 6vw, 44px); line-height: 1; font-variant-numeric: tabular-nums; color: var(--gold); }
+.timer { position: relative; width: 84px; height: 84px; }
+.timer svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.timer circle { fill: none; stroke-width: 7; }
+.timer .bgc { stroke: var(--line); }
+.timer .fgc { stroke: var(--gold); stroke-linecap: round; transition: stroke-dashoffset .2s linear; }
+.timer.hurry .fgc { stroke: var(--pink); }
+.timer .t { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-weight: 700; font-size: 22px; }
+.mode-tag { text-align: center; }
+.tug { position: relative; height: 22px; border-radius: 999px; overflow: hidden; background: linear-gradient(90deg, var(--violet), #5b48d6); border: 1px solid var(--line); }
+.tug .mine { position: absolute; inset: 0 auto 0 0; width: 50%; background: linear-gradient(90deg, var(--pink), var(--gold)); transition: width .5s cubic-bezier(.2,.9,.3,1.2); }
+.tug .mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; background: var(--fg); opacity: .7; }
+.goalm { display: flex; flex-direction: column; gap: 6px; }
+.goal-track { position: relative; height: 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+.goal-fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 999px; background: var(--gold); transition: width .5s; }
+.goal-mark { position: absolute; top: -5px; bottom: -5px; left: calc(100% / 1.2); width: 2px; background: var(--fg); }
+.goal-row { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.compose { display: flex; gap: 10px; flex-wrap: wrap; }
+.compose textarea {
+  flex: 1 1 320px; min-width: 0; min-height: 64px; resize: vertical;
+  font: inherit; font-size: 18px; color: var(--fg);
+  background: var(--bg); border: 2px solid var(--line); border-radius: 12px; padding: 12px 14px;
+}
+.compose textarea:focus { border-color: var(--gold); outline: none; }
+.banner {
+  border: 2px solid var(--gold); border-radius: 14px; padding: 16px 18px;
+  background: linear-gradient(135deg, rgba(245,196,81,.18), rgba(255,92,138,.14));
+  display: flex; flex-direction: column; gap: 4px;
+  animation: pop .5s cubic-bezier(.2,.9,.3,1.4);
+}
+.banner h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(22px, 4.5vw, 30px); color: var(--gold); line-height: 1.1; text-wrap: balance; }
+.banner p { margin: 0; }
+@keyframes pop { from { transform: scale(.92); opacity: .4; } to { transform: none; opacity: 1; } }
+.cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
+.cols.solo { grid-template-columns: minmax(0,1fr); }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.entry { border-bottom: 1px solid var(--line); padding-bottom: 10px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 6px 14px; }
+.entry:last-child { border-bottom: 0; }
+.entry .txt { overflow-wrap: anywhere; }
+.entry .pts { font-family: var(--mono); font-weight: 700; white-space: nowrap; }
+.pts.up { color: var(--good); } .pts.down { color: var(--bad); }
+.tags { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px; }
+.tag { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+.tag.plus b { color: var(--good); } .tag.minus b { color: var(--bad); } .tag.mult b { color: var(--gold); }
+.tag.used { text-decoration: line-through; opacity: .7; }
+.entry.fresh { animation: slide .35s ease-out; }
+@keyframes slide { from { transform: translateY(-6px); opacity: .2; } to { transform: none; opacity: 1; } }
+.match-foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
+.wait { color: var(--gold); font-family: var(--mono); font-size: 13px; }
+
+/* Result */
+.verdict { text-align: center; align-items: center; padding-block: 36px; }
+.verdict .word {
+  font-family: var(--display); font-size: clamp(56px, 14vw, 120px); line-height: .9; margin: 0;
+  background: linear-gradient(180deg, #fff3c9, var(--gold) 60%, #d98f1c);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(4px 4px 0 var(--pink));
+  animation: pop .6s cubic-bezier(.2,.9,.3,1.4);
+}
+.verdict.lose .word { background: linear-gradient(180deg, #e6dcf0, var(--violet)); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(4px 4px 0 #3b2a8a); }
+.verdict .sub { color: var(--muted); margin: 0; max-width: 52ch; }
+.final-scores { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; }
+.final-scores div { display: flex; flex-direction: column; align-items: center; }
+.final-scores .num { font-size: 32px; font-weight: 700; }
+.delta { font-family: var(--mono); font-size: 20px; font-weight: 700; }
+.delta.up { color: var(--good); } .delta.down { color: var(--bad); }
+.row-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+/* Overlay */
+.overlay { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(12,5,18,.82); backdrop-filter: blur(6px); padding: 24px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); }
+.ov-card { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 420px; }
+.ring { width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center; position: relative; }
+.ring::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--gold); border-right-color: var(--pink); animation: spin 1.1s linear infinite; }
+.ring svg { width: 56px; height: 56px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.ov-card h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 30px; }
+.ov-card p { margin: 0; color: var(--muted); }
+.count { font-family: var(--display); font-size: clamp(90px, 25vw, 180px); line-height: 1; color: var(--gold); filter: drop-shadow(5px 5px 0 var(--pink)); }
+.count.go { animation: zoom .8s ease-out; }
+@keyframes zoom { from { transform: scale(1.8); opacity: 0; } 30% { opacity: 1; } to { transform: scale(1); } }
+
+.toast {
+  position: fixed; z-index: 60; left: 50%; bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  background: var(--fg); color: var(--bg); font-weight: 500; padding: 10px 16px; border-radius: 10px;
+  max-width: calc(100% - 32px); text-align: center; transition: opacity .25s, transform .25s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.popup {
+  position: fixed; z-index: 55; pointer-events: none;
+  font-family: var(--mono); font-weight: 700; font-size: 28px; color: var(--gold);
+  text-shadow: 2px 2px 0 var(--pink);
+  animation: floatUp 1.2s ease-out forwards;
+}
+.popup.neg { color: var(--bad); text-shadow: 2px 2px 0 #3b2a8a; }
+@keyframes floatUp { from { transform: translate(-50%, 0) scale(.8); opacity: 0; } 15% { opacity: 1; transform: translate(-50%, -10px) scale(1.15); } to { transform: translate(-50%, -90px) scale(1); opacity: 0; } }
+
+@media (max-width: 860px) {
+  .lobby { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 680px) {
+  .cols { grid-template-columns: minmax(0,1fr); }
+  .hide-sm { display: none; }
+  .timer { width: 68px; height: 68px; }
+  .compose .btn-gold { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0b8"/><stop offset=".6" stop-color="#f5c451"/><stop offset="1" stop-color="#c47f12"/></linearGradient></defs>
+        <path d="M8 48 L4 16 L20 30 L32 8 L44 30 L60 16 L56 48 Z" fill="url(#cg)" stroke="#2a1503" stroke-width="2.5" stroke-linejoin="round"/>
+        <rect x="8" y="48" width="48" height="8" rx="2" fill="url(#cg)" stroke="#2a1503" stroke-width="2.5"/>
+        <circle cx="32" cy="36" r="4.5" fill="#ff5c8a" stroke="#2a1503" stroke-width="2"/>
+        <circle cx="18" cy="40" r="3" fill="#8f7bff" stroke="#2a1503" stroke-width="2"/>
+        <circle cx="46" cy="40" r="3" fill="#8f7bff" stroke="#2a1503" stroke-width="2"/>
+      </svg>
+      <h1>Unmatched Ego Checker</h1>
+    </div>
+    <span class="pill" id="netPill" data-state="connecting"><i></i><span id="netText">Connecting…</span></span>
+  </header>
+
+  <!-- LOBBY -->
+  <main id="screen-lobby">
+    <div class="lobby">
+      <section class="panel">
+        <p class="lede">Brag in full sentences. The scanner turns each one into <b>ego points</b>. Win ranked 2-minute matches to climb the leaderboard. Pass <b>100,000</b> and you'll almost be unmatched. Dempsey is still ahead.</p>
+        <div class="name-row">
+          <label class="cap" for="nameInput">Your name</label>
+          <input id="nameInput" maxlength="20" autocomplete="off" spellcheck="false">
+        </div>
+        <div>
+          <div class="cap">Ranked rating</div>
+          <div class="rating-big"><span class="num" id="meRating">1,000</span></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><span class="cap">Record</span><span class="num" id="meRecord">0W · 0L · 0D</span></div>
+          <div class="stat"><span class="cap">Best score</span><span class="num" id="meBest">0</span></div>
+        </div>
+        <div class="actions">
+          <button class="btn-gold" id="findBtn" type="button" disabled>Find ranked match</button>
+          <button class="btn-line" id="practiceBtn" type="button">Practice solo</button>
+        </div>
+        <details class="rules">
+          <summary>How scoring works</summary>
+          <ul>
+            <li>Talking about yourself (I, me, my, myself) earns points in every sentence.</li>
+            <li>Brag words like genius, legend, flawless and GOAT score big, but each one only counts once per match. Use it again and it scores nothing.</li>
+            <li>No repeats: a sentence that you or your rival already said is rejected. Rewording with the same words doesn't count either.</li>
+            <li>Bragging about yourself in one sentence doubles it. Each "!" adds 0.4×, up to 3×.</li>
+            <li>Claiming you're better than Dempsey pays +8,000 once per match. Praising Dempsey costs 4,000.</li>
+            <li>Humble words (sorry, maybe, thanks, we, team) cost points.</li>
+            <li>Ratings start at 1,000. Beating a higher-rated player earns more.</li>
+          </ul>
+        </details>
+      </section>
+
+      <div class="right">
+        <section class="panel">
+          <h2 class="sec">Leaderboard</h2>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Player</th><th class="r">Rating</th><th class="r">W–L</th><th class="r hide-sm">Best</th></tr></thead>
+              <tbody id="boardBody"></tbody>
+            </table>
+          </div>
+          <p class="empty" id="boardEmpty">No ranked matches yet. Play one and you're on the board.</p>
+        </section>
+        <section class="panel">
+          <h2 class="sec">Recent ranked matches</h2>
+          <ul class="feed" id="feed"></ul>
+          <p class="empty" id="feedEmpty">Finished ranked matches show up here for everyone.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- MATCH -->
+  <main id="screen-match" hidden>
+    <div class="panel">
+      <div class="hud">
+        <div class="fighter me">
+          <span class="cap" id="youRating">You</span>
+          <span class="nm" id="youName">You</span>
+          <span class="score" id="youScore">0</span>
+        </div>
+        <div class="mode-tag">
+          <div class="timer" id="timer">
+            <svg viewBox="0 0 64 64"><circle class="bgc" cx="32" cy="32" r="27"/><circle class="fgc" id="timerArc" cx="32" cy="32" r="27" stroke-dasharray="169.6" stroke-dashoffset="0"/></svg>
+            <span class="t" id="timerTxt">120</span>
+          </div>
+          <div class="cap" id="matchMode">Ranked</div>
+        </div>
+        <div class="fighter opp" id="oppSide">
+          <span class="cap" id="oppRating">Rival</span>
+          <span class="nm" id="oppName">Rival</span>
+          <span class="score" id="oppScore">0</span>
+        </div>
+      </div>
+      <div class="tug" id="tug" aria-hidden="true"><div class="mine" id="tugMine"></div><div class="mid"></div></div>
+      <div class="goalm">
+        <div class="goal-track" role="progressbar" aria-label="Road to 100,000" aria-valuemin="0" aria-valuemax="120000" id="goalTrack"><div class="goal-fill" id="goalFill"></div><div class="goal-mark"></div></div>
+        <div class="goal-row"><span>Road to 100k</span><span>Dempsey: off the chart</span></div>
+      </div>
+      <form class="compose" id="composeForm" autocomplete="off">
+        <label class="cap" for="egoInput" style="flex-basis:100%">Brag. Enter to send. No repeats.</label>
+        <textarea id="egoInput" placeholder="I am the most flawless legend in the galaxy!!!"></textarea>
+        <button class="btn-gold" type="submit" id="sendBtn">Scan it</button>
+      </form>
+      <div class="banner" id="matchBanner" hidden>
+        <h3>You almost have an unmatched ego…</h3>
+        <p>…besides the egoist Dempsey. Over 100,000 points and Dempsey is still ahead.</p>
+      </div>
+      <div class="match-foot">
+        <span class="wait" id="waitNote" hidden>Time! Waiting for your rival's final score…</span>
+        <span></span>
+        <button class="btn-line btn-small" id="leaveBtn" type="button">Forfeit</button>
+      </div>
+    </div>
+    <div class="cols" id="cols" style="margin-top:20px">
+      <section class="panel">
+        <div class="cap">Your sentences</div>
+        <ol class="log" id="myLog"></ol>
+        <p class="empty" id="myEmpty">Nothing yet. Start bragging.</p>
+      </section>
+      <section class="panel" id="oppCol">
+        <div class="cap" id="oppColCap">Rival's sentences</div>
+        <ol class="log" id="oppLog"></ol>
+        <p class="empty" id="oppEmpty">Your rival hasn't said anything yet.</p>
+      </section>
+    </div>
+  </main>
+
+  <!-- RESULT -->
+  <main id="screen-result" hidden>
+    <section class="panel verdict" id="verdict">
+      <h2 class="word" id="vWord">Victory</h2>
+      <p class="sub" id="vSub"></p>
+      <div class="final-scores">
+        <div><span class="cap" id="vYouLbl">You</span><span class="num" id="vYou">0</span></div>
+        <div id="vOppBox"><span class="cap" id="vOppLbl">Rival</span><span class="num" id="vOpp">0</span></div>
+      </div>
+      <div class="delta" id="vDelta"></div>
+      <div class="banner" id="vBanner" hidden>
+        <h3>You almost have an unmatched ego…</h3>
+        <p>…besides the egoist Dempsey.</p>
+      </div>
+      <div class="row-btns">
+        <button class="btn-gold" id="againBtn" type="button">Find another match</button>
+        <button class="btn-line" id="lobbyBtn" type="button">Back to lobby</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="ov-card" id="ovSearch" hidden>
+    <div class="ring"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 48 L4 16 L20 30 L32 8 L44 30 L60 16 L56 48 Z" fill="#f5c451"/></svg></div>
+    <h2>Looking for a rival…</h2>
+    <p><span class="num" id="searchSecs">0</span>s · <span id="searchOnline">0</span> online</p>
+    <p>Send the link to a friend so they can join the queue.</p>
+    <button class="btn-line" id="cancelSearch" type="button">Cancel</button>
+  </div>
+  <div class="ov-card" id="ovCount" hidden>
+    <p class="cap" id="countVs">vs</p>
+    <div class="count" id="countNum">3</div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var BASE = "uec-ego-v1";
+  var BROKER = "wss://broker.hivemq.com:8884/mqtt";
+  var ROUND_MS = 120000, GOAL = 100000, K = 32;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = function (n) { return Math.round(n).toLocaleString("en-US"); };
+  function num(x, min, max, d) { x = Number(x); return isFinite(x) ? Math.min(max, Math.max(min, x)) : d; }
+  function cleanName(s) { return String(s == null ? "" : s).replace(/[\u0000-\u001f]/g, "").trim().slice(0, 20); }
+  function safeId(s) { return String(s || "").replace(/[^a-z0-9]/gi, "").slice(0, 24); }
+  function rid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
+  function h(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  var reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- Profile (kept in this browser) ---------- */
+  var slot = (new URLSearchParams(location.search).get("p") || "").replace(/[^a-z0-9]/gi, "").slice(0, 8);
+  var PKEY = "uec-profile" + (slot ? "-" + slot : "");
+  var ADJ = ["Vain", "Smug", "Gilded", "Mighty", "Royal", "Shiny", "Flawless", "Grand"];
+  var NOUN = ["Peacock", "Mirror", "Crown", "Legend", "Diva", "Icon", "Lion", "Star"];
+  function randomName() { return ADJ[Math.random() * ADJ.length | 0] + NOUN[Math.random() * NOUN.length | 0] + (10 + Math.random() * 90 | 0); }
+  function loadProfile() { try { var p = JSON.parse(localStorage.getItem(PKEY)); if (p && p.id) return p; } catch (e) {} return null; }
+  function saveProfile() { try { localStorage.setItem(PKEY, JSON.stringify(me)); } catch (e) {} }
+  var me = loadProfile() || { id: rid(), name: randomName(), rating: 1000, wins: 0, losses: 0, draws: 0, best: 0, games: 0 };
+  saveProfile();
+
+  /* ---------- Scoring ---------- */
+  var SELF = { i: 250, me: 200, my: 250, mine: 400, myself: 900, "i'm": 350, im: 350, "i've": 250, "i'll": 250, "i'd": 200 };
+  var BRAG = {
+    best: 1200, greatest: 1500, genius: 1500, legend: 1500, legendary: 1500, perfect: 1300, perfection: 1300,
+    flawless: 1400, amazing: 900, awesome: 800, incredible: 1000, brilliant: 1200, smartest: 1500,
+    king: 1300, queen: 1300, god: 2000, goat: 2000, champion: 1200, champ: 1000, unbeatable: 1600,
+    undefeated: 1500, unstoppable: 1500, iconic: 1200, icon: 1100, superior: 1300, elite: 1100,
+    rich: 900, handsome: 900, beautiful: 900, gorgeous: 1000, talented: 1000, gifted: 1000,
+    boss: 900, winner: 900, win: 400, wins: 400, star: 800, superstar: 1300, mastermind: 1500,
+    master: 1000, special: 700, chosen: 1200, magnificent: 1300, majestic: 1200, royal: 1000,
+    famous: 900, cool: 500, smart: 700, strong: 600, strongest: 1400, fastest: 1400,
+    unmatched: 1800, unrivaled: 1800, untouchable: 1600, prodigy: 1400, hero: 900,
+    destroy: 800, dominate: 1100, dominated: 1100, carry: 600, carried: 700, always: 300, never: 300,
+    obviously: 600, clearly: 500, ever: 400, everyone: 500, everybody: 500, worship: 1800, admire: 900,
+    jealous: 1200, envy: 1000, slay: 900, goated: 2000, "10/10": 1200, perfectly: 900, legendary: 1500,
+    phenomenal: 1300, spectacular: 1200, extraordinary: 1300, invincible: 1600, supreme: 1500, emperor: 1400,
+    empress: 1400, celebrity: 1000, glorious: 1200, dazzling: 1000, stunning: 1000, epic: 800, flex: 900
+  };
+  var HUMBLE = {
+    sorry: -900, apologize: -900, apologise: -900, maybe: -500, perhaps: -500, humble: -1200, modest: -1200,
+    thanks: -500, thank: -500, grateful: -700, please: -300, we: -300, us: -300, our: -300, team: -500,
+    together: -400, help: -300, learn: -400, learning: -400, wrong: -800, mistake: -700, mistakes: -700,
+    probably: -300, kinda: -300, average: -800, okay: -200, ok: -200, normal: -500,
+    you: -150, your: -150, they: -100
+  };
+  var PHRASES = [
+    { re: /of all time/, pts: 2500, label: "of all time" },
+    { re: /\b(no ?one|nobody) (can|could|will|is)\b/, pts: 1800, label: "nobody can" },
+    { re: /bow down/, pts: 3000, label: "bow down" },
+    { re: /in the (world|universe|galaxy|history)/, pts: 2000, label: "in the world" },
+    { re: /\bbetter than (everyone|everybody|all)/, pts: 2500, label: "better than everyone" },
+    { re: /\bmain character\b/, pts: 2200, label: "main character" },
+    { re: /\bi('m| am) (just )?(that|him|her)\b/, pts: 2200, label: "I'm just that" }
+  ];
+  var EST_SKIP = {};
+  "test rest west best guest honest interest forest request suggest modest contest protest chest nest pest quest vest zest invest arrest harvest digest latest biggest manifest dearest earnest attest greatest smartest strongest fastest lest jest crest".split(" ").forEach(function (w) { EST_SKIP[w] = 1; });
+
+  function splitSentences(text) {
+    return (text.match(/[^.!?]+[.!?]*/g) || []).map(function (s) { return s.trim(); }).filter(function (s) { return /[a-z]/i.test(s); });
+  }
+  function sentenceKey(s) {
+    var ws = String(s).toLowerCase().replace(/’/g, "'").match(/[a-z0-9']+/g) || [];
+    var uniq = {}; ws.forEach(function (w) { uniq[w] = 1; });
+    return Object.keys(uniq).sort().join(" ");
+  }
+
+  // `used` holds brag words/phrases this player already cashed in this match.
+  function scoreSentence(raw, used) {
+    var text = raw.trim().slice(0, 300);
+    var norm = text.replace(/’/g, "'");
+    var lower = norm.toLowerCase();
+    var tags = [], base = 0, hasSelf = false, hasBrag = false, here = {};
+    (norm.match(/[A-Za-z0-9'\/]+/g) || []).forEach(function (ow) {
+      var w = ow.toLowerCase();
+      if (here[w]) return; here[w] = 1;
+      if (SELF[w] != null) { base += SELF[w]; hasSelf = true; tags.push(["plus", ow, SELF[w]]); return; }
+      if (HUMBLE[w] != null) { base += HUMBLE[w]; tags.push(["minus", w, HUMBLE[w]]); return; }
+      var v = BRAG[w], label = w;
+      if (v == null && w.length > 4 && /est$/.test(w) && !EST_SKIP[w]) { v = 600; label = w + " (-est)"; }
+      if (v != null) {
+        if (used[w]) tags.push(["used", w, "used"]);
+        else { used[w] = 1; base += v; hasBrag = true; tags.push(["plus", label, v]); }
+      }
+      if (ow.length >= 3 && ow === ow.toUpperCase() && /[A-Z]/.test(ow)) {
+        var ck = "caps:" + w;
+        if (!used[ck]) { used[ck] = 1; base += 300; tags.push(["plus", ow + " (caps)", 300]); }
+      }
+    });
+    PHRASES.forEach(function (p) {
+      if (!p.re.test(lower)) return;
+      var k = "p:" + p.label;
+      if (used[k]) { tags.push(["used", "“" + p.label + "”", "used"]); return; }
+      used[k] = 1; base += p.pts; hasBrag = true; tags.push(["plus", "“" + p.label + "”", p.pts]);
+    });
+    if (/dempsey/.test(lower)) {
+      if (/(dempsey is|dempsey's) (the )?(best|greatest|better|king|goat|amazing|legend)/.test(lower) || /(love|respect|admire) dempsey/.test(lower)) {
+        base -= 4000; tags.push(["minus", "praising Dempsey", -4000]);
+      } else if (hasSelf && /(better|greater|smarter|bigger|stronger|cooler|beat|than)/.test(lower)) {
+        if (used["d:beat"]) tags.push(["used", "dethroning Dempsey", "used"]);
+        else { used["d:beat"] = 1; base += 8000; tags.push(["plus", "dethroning Dempsey", 8000]); }
+      } else if (!used["d:name"]) { used["d:name"] = 1; base += 500; tags.push(["plus", "name-dropping Dempsey", 500]); }
+    }
+    var mult = 1;
+    if (hasSelf && hasBrag && base > 0) { mult *= 2; tags.push(["mult", "self + brag combo", "×2"]); }
+    var bangs = (raw.match(/!/g) || []).length;
+    if (bangs > 0 && base > 0) { var m = Math.min(3, 1 + 0.4 * bangs); mult *= m; tags.push(["mult", "!".repeat(Math.min(bangs, 6)), "×" + m.toFixed(1)]); }
+    var pts = Math.max(-20000, Math.min(25000, Math.round(base * mult)));
+    if (!tags.length) tags.push(["", "no ego detected", 0]);
+    return { text: text, pts: pts, tags: tags };
+  }
+
+  /* ---------- UI helpers ---------- */
+  var toastT;
+  function toast(msg) { var t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(function () { t.classList.remove("show"); }, 3400); }
+  function showScreen(n) { ["lobby", "match", "result"].forEach(function (s) { $("screen-" + s).hidden = s !== n; }); window.scrollTo(0, 0); }
+  function showOverlay(kind) { $("overlay").hidden = false; $("ovSearch").hidden = kind !== "search"; $("ovCount").hidden = kind !== "count"; }
+  function hideOverlay() { $("overlay").hidden = true; }
+  function ago(t) {
+    var s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 60) return "just now"; if (s < 3600) return Math.floor(s / 60) + " min ago";
+    if (s < 86400) return Math.floor(s / 3600) + " h ago"; return Math.floor(s / 86400) + " d ago";
+  }
+  function tweenNum(el, to) {
+    var from = el._v || 0; el._v = to;
+    if (reduceMotion || from === to) { el.textContent = fmt(to); return; }
+    var start = performance.now(), dur = 600;
+    cancelAnimationFrame(el._raf);
+    (function step(now) {
+      var k = Math.min(1, (now - start) / dur); k = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmt(from + (to - from) * k);
+      if (k < 1) el._raf = requestAnimationFrame(step);
+    })(start);
+  }
+  function renderTags(container, tags) {
+    tags.forEach(function (t) {
+      var s = h("span", "tag " + t[0]);
+      var v = t[2];
+      var vs = typeof v === "number" ? (v > 0 ? "+" + fmt(v) : v < 0 ? "−" + fmt(-v) : "0") : v;
+      s.append(t[1] + " "); s.append(h("b", null, vs));
+      container.append(s);
+    });
+  }
+
+  /* ---------- Background sky + particle FX ---------- */
+  var sky = $("sky"), sctx = sky.getContext("2d"), stars = [];
+  var fx = $("fx"), fctx = fx.getContext("2d"), parts = [], fxRun = false;
+  function sizeCanvases() {
+    var d = window.devicePixelRatio || 1, w = innerWidth, hh = innerHeight;
+    [sky, fx].forEach(function (c) { c.width = w * d; c.height = hh * d; });
+    sctx.setTransform(d, 0, 0, d, 0, 0); fctx.setTransform(d, 0, 0, d, 0, 0);
+    stars = [];
+    var n = Math.round(w * hh / 12000);
+    for (var i = 0; i < n; i++) stars.push({ x: Math.random() * w, y: Math.random() * hh, r: Math.random() * 1.6 + .3, s: Math.random() * .25 + .04, p: Math.random() * 6.28, c: Math.random() < .2 ? "255,92,138" : "245,196,81" });
+    if (reduceMotion) drawSky(0);
+  }
+  function drawSky(t) {
+    var w = innerWidth, hh = innerHeight;
+    sctx.clearRect(0, 0, w, hh);
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      if (!reduceMotion) { s.y -= s.s; if (s.y < -4) { s.y = hh + 4; s.x = Math.random() * w; } }
+      var a = .25 + .35 * (0.5 + 0.5 * Math.sin(t / 900 + s.p));
+      sctx.fillStyle = "rgba(" + s.c + "," + a.toFixed(3) + ")";
+      sctx.beginPath(); sctx.arc(s.x, s.y, s.r, 0, 6.283); sctx.fill();
+    }
+  }
+  function skyLoop(t) { drawSky(t); requestAnimationFrame(skyLoop); }
+  var COLORS = ["#f5c451", "#ffe08a", "#ff5c8a", "#ffffff", "#8f7bff"];
+  function burst(x, y, n) {
+    if (reduceMotion) return;
+    for (var i = 0; i < n; i++) {
+      var a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 7;
+      parts.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 3, life: 50 + Math.random() * 50, age: 0, r: 2 + Math.random() * 3.5, c: COLORS[i % COLORS.length], rot: Math.random() * 6, vr: (Math.random() - .5) * .3, sq: Math.random() < .5 });
+    }
+    if (!fxRun) { fxRun = true; requestAnimationFrame(fxLoop); }
+  }
+  function fxLoop() {
+    fctx.clearRect(0, 0, innerWidth, innerHeight);
+    parts = parts.filter(function (p) { return p.age < p.life; });
+    parts.forEach(function (p) {
+      p.age++; p.vy += .18; p.vx *= .985; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+      fctx.globalAlpha = Math.max(0, 1 - p.age / p.life);
+      fctx.fillStyle = p.c;
+      if (p.sq) { fctx.save(); fctx.translate(p.x, p.y); fctx.rotate(p.rot); fctx.fillRect(-p.r, -p.r / 2, p.r * 2, p.r); fctx.restore(); }
+      else { fctx.beginPath(); fctx.arc(p.x, p.y, p.r, 0, 6.283); fctx.fill(); }
+    });
+    fctx.globalAlpha = 1;
+    if (parts.length) requestAnimationFrame(fxLoop); else { fxRun = false; fctx.clearRect(0, 0, innerWidth, innerHeight); }
+  }
+  function popup(el, pts) {
+    var r = el.getBoundingClientRect();
+    var p = h("div", "popup" + (pts < 0 ? " neg" : ""), (pts >= 0 ? "+" : "−") + fmt(Math.abs(pts)));
+    p.style.left = (r.left + r.width / 2) + "px"; p.style.top = (r.top + 10) + "px";
+    document.body.append(p); setTimeout(function () { p.remove(); }, 1300);
+    if (pts > 0) burst(r.left + r.width / 2, r.top + 20, Math.min(90, 12 + pts / 400));
+  }
+  function confetti() {
+    if (reduceMotion) return;
+    for (var i = 0; i < 5; i++) (function (i) { setTimeout(function () { burst(innerWidth * (0.15 + 0.175 * i), innerHeight * 0.3, 70); }, i * 140); })(i);
+  }
+  window.addEventListener("resize", sizeCanvases);
+  sizeCanvases();
+  if (!reduceMotion) requestAnimationFrame(skyLoop);
+
+  /* ---------- Network (free public MQTT broker) ---------- */
+  var client = null, connected = false, netState = "connecting";
+  var ranked = {}, online = {}, queue = {}, matches = {};
+  function pub(topic, obj, retain, qos) {
+    if (!client || !connected) return;
+    try { client.publish(topic, obj == null ? "" : JSON.stringify(obj), { retain: !!retain, qos: qos || 0 }); } catch (e) {}
+  }
+  function announce() { pub(BASE + "/online/" + me.id, { name: me.name, rating: me.rating, t: Date.now() }, true); }
+  function pubRanked() { if (me.games > 0) pub(BASE + "/ranked/" + me.id, { name: me.name, rating: me.rating, wins: me.wins, losses: me.losses, draws: me.draws, best: me.best, games: me.games, t: Date.now() }, true, 1); }
+  function onlineCount() { var n = 0, now = Date.now(); Object.keys(online).forEach(function (k) { if (now - online[k].t < 150000) n++; }); return Math.max(n, connected ? 1 : 0); }
+  function setNet(s) {
+    netState = s;
+    $("netPill").dataset.state = s;
+    $("netText").textContent = s === "online" ? "Online · " + onlineCount() + " here" : s === "connecting" ? "Connecting…" : "Offline · practice only";
+    $("findBtn").disabled = s !== "online";
+    $("againBtn").disabled = s !== "online";
+    $("searchOnline").textContent = onlineCount();
+  }
+  function connect() {
+    if (!window.mqtt) { setNet("offline"); return; }
+    try {
+      client = mqtt.connect(BROKER, {
+        clientId: "uec_" + me.id + "_" + Math.random().toString(36).slice(2, 7),
+        keepalive: 30, reconnectPeriod: 4000, connectTimeout: 12000, clean: true,
+        will: { topic: BASE + "/online/" + me.id, payload: "", retain: true, qos: 0 }
+      });
+    } catch (e) { setNet("offline"); return; }
+    client.on("connect", function () {
+      connected = true;
+      client.subscribe([BASE + "/ranked/+", BASE + "/online/+", BASE + "/matches/+", BASE + "/queue/+", BASE + "/inbox/" + me.id], { qos: 1 });
+      if (match && match.online) client.subscribe(BASE + "/match/" + match.mid + "/+", { qos: 1 });
+      announce(); pubRanked();
+      setNet("online");
+    });
+    client.on("close", function () { connected = false; setNet("connecting"); });
+    client.on("offline", function () { connected = false; setNet("offline"); });
+    client.on("error", function () {});
+    client.on("message", onMsg);
+    setInterval(announce, 45000);
+    setTimeout(function () { if (!connected) setNet("offline"); }, 15000);
+  }
+  window.addEventListener("beforeunload", function () {
+    if (searching) pub(BASE + "/queue/" + me.id, null, true);
+    pub(BASE + "/online/" + me.id, null, true);
+  });
+
+  function onMsg(topic, payload) {
+    var p = topic.split("/"); if (p[0] !== BASE) return;
+    var kind = p[1], id = safeId(p[2]), d = null, s = payload ? payload.toString() : "";
+    if (s) { try { d = JSON.parse(s); } catch (e) { return; } if (!d || typeof d !== "object") return; }
+    if (kind === "ranked") {
+      if (!d) delete ranked[id];
+      else ranked[id] = { name: cleanName(d.name) || "Someone", rating: num(d.rating, 0, 5000, 1000), wins: num(d.wins, 0, 1e6, 0) | 0, losses: num(d.losses, 0, 1e6, 0) | 0, draws: num(d.draws, 0, 1e6, 0) | 0, best: num(d.best, 0, 1e7, 0), games: num(d.games, 0, 1e6, 0) | 0 };
+      renderBoard();
+    } else if (kind === "online") {
+      if (!d) {
+        delete online[id];
+        if (match && match.online && match.oppInfo.id === id && (match.phase === "live" || match.phase === "countdown")) {
+          match.oppForfeit = true; toast(match.oppInfo.name + " left the match. You win by forfeit."); endRound(false);
+        }
+      } else online[id] = { name: cleanName(d.name), t: num(d.t, 0, 9e15, 0) };
+      setNet(netState);
+    } else if (kind === "queue") {
+      if (!d) delete queue[id]; else queue[id] = { name: cleanName(d.name) || "Someone", rating: num(d.rating, 0, 5000, 1000), t: num(d.t, 0, 9e15, 0) };
+      if (searching) tryPair();
+    } else if (kind === "matches") {
+      if (!d) delete matches[id];
+      else {
+        var side = function (x) { x = x || {}; return { id: safeId(x.id), name: cleanName(x.name) || "Someone", total: num(x.total, 0, 1e7, 0), delta: num(x.delta, -100, 100, 0) }; };
+        matches[id] = { t: num(d.t, 0, 9e15, 0), a: side(d.a), b: side(d.b) };
+      }
+      renderFeed();
+    } else if (kind === "inbox") {
+      if (id === me.id && d) onInbox(d);
+    } else if (kind === "match") {
+      if (d && match && match.online && id === match.mid && safeId(p[3]) === match.oppInfo.id) handleOpp(d);
+    }
+  }
+
+  /* ---------- Matchmaking ---------- */
+  var searching = null;
+  function findMatch() {
+    if (!connected) { toast("Can't reach the game server right now. Practice solo while it reconnects."); return; }
+    if (searching || match) return;
+    searching = { since: Date.now(), pending: null };
+    pubQueue();
+    searching.hb = setInterval(pubQueue, 8000);
+    searching.clock = setInterval(function () { $("searchSecs").textContent = Math.floor((Date.now() - searching.since) / 1000); }, 500);
+    $("searchSecs").textContent = "0";
+    showScreen("lobby"); showOverlay("search");
+    tryPair();
+  }
+  function pubQueue() { pub(BASE + "/queue/" + me.id, { name: me.name, rating: me.rating, t: Date.now() }, true); }
+  function stopSearch() {
+    if (!searching) return;
+    clearInterval(searching.hb); clearInterval(searching.clock); clearTimeout(searching.pendingT);
+    pub(BASE + "/queue/" + me.id, null, true);
+    searching = null; hideOverlay();
+  }
+  function tryPair() {
+    if (!searching || searching.pending) return;
+    var now = Date.now();
+    var cands = Object.keys(queue).filter(function (id) { return id !== me.id && me.id < id && now - queue[id].t < 45000; })
+      .sort(function (a, b) { return Math.abs(queue[a].rating - me.rating) - Math.abs(queue[b].rating - me.rating); });
+    if (!cands.length) return;
+    var oid = cands[0], q = queue[oid];
+    var mid = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    searching.pending = { mid: mid, oid: oid };
+    pub(BASE + "/inbox/" + oid, { type: "invite", mid: mid, from: me.id, name: me.name, rating: me.rating }, false, 1);
+    searching.pendingT = setTimeout(function () {
+      if (searching && searching.pending && searching.pending.mid === mid) { searching.pending = null; delete queue[oid]; tryPair(); }
+    }, 6000);
+  }
+  function onInbox(d) {
+    var from = safeId(d.from), mid = safeId(d.mid);
+    if (!from || !mid) return;
+    var opp = { id: from, name: cleanName(d.name) || "Rival", rating: num(d.rating, 0, 5000, 1000) };
+    if (d.type === "invite") {
+      var ok = !!searching && !match && !searching.pending;
+      pub(BASE + "/inbox/" + from, { type: ok ? "accept" : "decline", mid: mid, from: me.id, name: me.name, rating: me.rating }, false, 1);
+      if (ok) { stopSearch(); startMatch({ online: true, mid: mid, host: false, oppInfo: opp }); }
+    } else if (d.type === "accept") {
+      if (searching && searching.pending && searching.pending.mid === mid) { stopSearch(); startMatch({ online: true, mid: mid, host: true, oppInfo: opp }); }
+      else pub(BASE + "/inbox/" + from, { type: "cancel", mid: mid, from: me.id }, false, 1);
+    } else if (d.type === "decline") {
+      if (searching && searching.pending && searching.pending.mid === mid) { clearTimeout(searching.pendingT); searching.pending = null; setTimeout(tryPair, 400); }
+    } else if (d.type === "cancel") {
+      if (match && match.online && match.mid === mid && match.phase !== "done") {
+        if (client) client.unsubscribe(BASE + "/match/" + mid + "/+");
+        match = null; hideOverlay(); showScreen("lobby"); toast("That match fell through. Searching again.");
+        findMatch();
+      }
+    }
+  }
+
+  /* ---------- Match ---------- */
+  var match = null;
+  function startMatch(o) {
+    match = { online: o.online, mid: o.mid, host: o.host, oppInfo: o.oppInfo || null, my: 0, their: 0, mine: [], theirs: [], keys: {}, used: {}, phase: "countdown", oppFinal: null, oppForfeit: false, forfeit: false, ratingAtStart: me.rating, celebrated: false };
+    if (o.online && client) client.subscribe(BASE + "/match/" + o.mid + "/+", { qos: 1 });
+    $("youName").textContent = me.name;
+    $("youRating").textContent = o.online ? "You · " + fmt(me.rating) : "You";
+    $("oppSide").hidden = !o.online; $("tug").hidden = !o.online; $("oppCol").hidden = !o.online;
+    $("cols").classList.toggle("solo", !o.online);
+    if (o.online) { $("oppName").textContent = o.oppInfo.name; $("oppRating").textContent = "Rival · " + fmt(o.oppInfo.rating); $("oppColCap").textContent = o.oppInfo.name + "'s sentences"; }
+    $("matchMode").textContent = o.online ? "Ranked" : "Practice";
+    $("leaveBtn").textContent = o.online ? "Forfeit" : "End practice";
+    $("youScore")._v = 0; $("oppScore")._v = 0;
+    $("egoInput").value = ""; $("egoInput").disabled = false; $("sendBtn").disabled = false;
+    $("waitNote").hidden = true; $("matchBanner").hidden = true;
+    $("timer").classList.remove("hurry"); setTimer(o.online ? 1 : 1, o.online ? String(ROUND_MS / 1000) : "∞");
+    showScreen("match"); renderMatch();
+    if (o.online) {
+      $("countVs").textContent = me.name + "  vs  " + o.oppInfo.name;
+      countdown(function () { match.phase = "live"; match.endsAt = Date.now() + ROUND_MS; tick(); $("egoInput").focus(); });
+    } else { match.phase = "live"; $("egoInput").focus(); }
+  }
+  function countdown(done) {
+    var seq = ["3", "2", "1", "Brag!"], i = 0;
+    showOverlay("count");
+    (function step() {
+      if (!match || match.phase !== "countdown") { hideOverlay(); return; }
+      if (i >= seq.length) { hideOverlay(); done(); return; }
+      var el = $("countNum"); el.textContent = seq[i]; el.classList.remove("go"); void el.offsetWidth; el.classList.add("go");
+      if (i === seq.length - 1) burst(innerWidth / 2, innerHeight / 2, 60);
+      i++; setTimeout(step, 800);
+    })();
+  }
+  function setTimer(frac, label) {
+    $("timerArc").setAttribute("stroke-dashoffset", String(169.6 * (1 - frac)));
+    $("timerTxt").textContent = label;
+  }
+  function tick() {
+    if (!match || match.phase !== "live" || !match.online) return;
+    var left = Math.max(0, match.endsAt - Date.now());
+    setTimer(left / ROUND_MS, String(Math.ceil(left / 1000)));
+    $("timer").classList.toggle("hurry", left <= 10000);
+    if (left <= 0) { endRound(false); return; }
+    match.tickT = setTimeout(tick, 200);
+  }
+  function submitText(text) {
+    if (!match || match.phase !== "live") return;
+    var parts = splitSentences(text), rejected = 0, added = 0, gained = 0;
+    parts.forEach(function (s) {
+      var key = sentenceKey(s);
+      if (key.split(" ").length < 2) { rejected++; return; }
+      if (match.keys[key]) { rejected++; return; }
+      match.keys[key] = 1;
+      var r = scoreSentence(s, match.used);
+      match.my = Math.max(0, match.my + r.pts); gained += r.pts; added++;
+      match.mine.push(r);
+      if (match.online) pub(BASE + "/match/" + match.mid + "/" + me.id, { type: "line", text: r.text, pts: r.pts, total: match.my }, false, 1);
+    });
+    if (rejected) toast(added ? rejected + " repeated or too-short sentence" + (rejected > 1 ? "s" : "") + " skipped. No repeats." : "Already said. Repeats don't count, so brag about something new.");
+    if (added) { popup($("egoInput"), gained); renderMatch(added); }
+  }
+  function handleOpp(d) {
+    var m = match;
+    if (d.type === "line") {
+      var text = String(d.text || "").slice(0, 300), pts = num(d.pts, -20000, 60000, 0);
+      if (!text) return;
+      m.theirs.push({ text: text, pts: pts });
+      m.keys[sentenceKey(text)] = 1;
+      m.their = num(d.total, 0, 1e7, m.their);
+      renderMatch(0, true);
+    } else if (d.type === "final") {
+      m.their = num(d.total, 0, 1e7, m.their); m.oppFinal = m.their;
+      if (d.forfeit && m.phase !== "done") {
+        m.oppForfeit = true; toast(m.oppInfo.name + " forfeited. You win.");
+        if (m.phase === "live" || m.phase === "countdown") { endRound(false); return; }
+      }
+      if (m.phase === "waiting") finish();
+      else renderMatch();
+    }
+  }
+  function renderMatch(freshMine, freshTheirs) {
+    var m = match; if (!m) return;
+    tweenNum($("youScore"), m.my);
+    if (m.online) {
+      tweenNum($("oppScore"), m.their);
+      var tot = m.my + m.their;
+      $("tugMine").style.width = (tot > 0 ? (m.my / tot) * 100 : 50) + "%";
+    }
+    $("goalFill").style.width = Math.min(100, (m.my / 120000) * 100) + "%";
+    $("goalTrack").setAttribute("aria-valuenow", String(Math.round(m.my)));
+    if (m.my > GOAL) {
+      $("matchBanner").hidden = false;
+      if (!m.celebrated) { m.celebrated = true; confetti(); }
+    }
+    var log = $("myLog"); log.textContent = "";
+    m.mine.slice().reverse().forEach(function (e, i) {
+      var li = h("li", "entry" + (i < (freshMine || 0) ? " fresh" : ""));
+      li.append(h("div", "txt", e.text), h("div", "pts " + (e.pts >= 0 ? "up" : "down"), (e.pts >= 0 ? "+" : "−") + fmt(Math.abs(e.pts))));
+      var tg = h("div", "tags"); renderTags(tg, e.tags); li.append(tg);
+      log.append(li);
+    });
+    $("myEmpty").hidden = m.mine.length > 0;
+    if (m.online) {
+      var ol = $("oppLog"); ol.textContent = "";
+      m.theirs.slice().reverse().forEach(function (e, i) {
+        var li = h("li", "entry" + (freshTheirs && i === 0 ? " fresh" : ""));
+        li.append(h("div", "txt", e.text), h("div", "pts " + (e.pts >= 0 ? "up" : "down"), (e.pts >= 0 ? "+" : "−") + fmt(Math.abs(e.pts))));
+        ol.append(li);
+      });
+      $("oppEmpty").hidden = m.theirs.length > 0;
+    }
+  }
+  function endRound(forfeit) {
+    var m = match;
+    if (!m || m.phase === "waiting" || m.phase === "done") return;
+    clearTimeout(m.tickT);
+    $("egoInput").disabled = true; $("sendBtn").disabled = true;
+    if (!m.online) { m.phase = "done"; showResult({ practice: true, my: m.my }); return; }
+    m.phase = "waiting"; m.forfeit = !!forfeit;
+    setTimer(0, "0");
+    pub(BASE + "/match/" + m.mid + "/" + me.id, { type: "final", total: m.my, forfeit: !!forfeit }, false, 1);
+    if (forfeit || m.oppForfeit || m.oppFinal != null) finish();
+    else { $("waitNote").hidden = false; m.waitT = setTimeout(finish, 6000); }
+  }
+  function finish() {
+    var m = match; if (!m || m.phase === "done") return;
+    m.phase = "done"; clearTimeout(m.waitT);
+    var result = m.forfeit ? 0 : m.oppForfeit ? 1 : m.my > m.their ? 1 : m.my < m.their ? 0 : 0.5;
+    var expected = 1 / (1 + Math.pow(10, (m.oppInfo.rating - m.ratingAtStart) / 400));
+    var delta = Math.round(K * (result - expected));
+    me.rating = Math.max(100, me.rating + delta); me.games++;
+    if (result === 1) me.wins++; else if (result === 0) me.losses++; else me.draws++;
+    me.best = Math.max(me.best, m.my);
+    saveProfile(); pubRanked(); announce();
+    if (m.host) pub(BASE + "/matches/" + m.mid, { t: Date.now(), a: { id: me.id, name: me.name, total: m.my, delta: delta }, b: { id: m.oppInfo.id, name: m.oppInfo.name, total: m.their, delta: -delta } }, true, 1);
+    if (client) client.unsubscribe(BASE + "/match/" + m.mid + "/+");
+    showResult({ result: result, delta: delta, my: m.my, their: m.their, opp: m.oppInfo, forfeit: m.forfeit, oppForfeit: m.oppForfeit });
+  }
+  function showResult(r) {
+    hideOverlay();
+    var v = $("verdict");
+    v.classList.toggle("lose", !r.practice && r.result === 0);
+    $("vYou").textContent = fmt(r.my);
+    $("vYouLbl").textContent = me.name;
+    $("vOppBox").hidden = !!r.practice;
+    $("vBanner").hidden = r.my <= GOAL;
+    if (r.practice) {
+      $("vWord").textContent = "Practice over";
+      $("vSub").textContent = "Practice doesn't change your rating. Take that ego into a ranked match.";
+      $("vDelta").textContent = ""; $("vDelta").className = "delta";
+    } else {
+      $("vOpp").textContent = fmt(r.their); $("vOppLbl").textContent = r.opp.name;
+      $("vWord").textContent = r.result === 1 ? "Victory" : r.result === 0 ? "Defeat" : "Draw";
+      $("vSub").textContent = r.forfeit ? "You forfeited." : r.oppForfeit ? r.opp.name + " left early, so the win is yours." : r.result === 1 ? "Your ego outshone " + r.opp.name + "'s." : r.result === 0 ? r.opp.name + " bragged harder this time." : "Two equally enormous egos.";
+      $("vDelta").textContent = "Rating " + fmt(me.rating) + " (" + (r.delta >= 0 ? "+" : "−") + Math.abs(r.delta) + ")";
+      $("vDelta").className = "delta " + (r.delta >= 0 ? "up" : "down");
+    }
+    $("againBtn").textContent = r.practice ? "Find ranked match" : "Find another match";
+    showScreen("result"); renderMe();
+    if (!r.practice && r.result === 1) confetti();
+    match = null;
+  }
+
+  /* ---------- Lobby rendering ---------- */
+  function renderMe() {
+    $("meRating").textContent = fmt(me.rating);
+    $("meRecord").textContent = me.wins + "W · " + me.losses + "L · " + me.draws + "D";
+    $("meBest").textContent = fmt(me.best);
+    if (document.activeElement !== $("nameInput")) $("nameInput").value = me.name;
+  }
+  function renderBoard() {
+    var ids = Object.keys(ranked).filter(function (id) { return ranked[id].games > 0; })
+      .sort(function (a, b) { return ranked[b].rating - ranked[a].rating; }).slice(0, 25);
+    var tb = $("boardBody"); tb.textContent = "";
+    $("boardEmpty").hidden = ids.length > 0;
+    ids.forEach(function (id, i) {
+      var r = ranked[id];
+      var tr = h("tr", (id === me.id ? "you " : "") + (i < 3 ? "top" + (i + 1) : ""));
+      tr.append(h("td", "rk", i < 3 ? ["♛1", "♛2", "♛3"][i] : String(i + 1)));
+      var nm = h("td", null, r.name); if (id === me.id) nm.append(h("span", "you-tag", "you"));
+      tr.append(nm, h("td", "r num", fmt(r.rating)), h("td", "r num", r.wins + "–" + r.losses), h("td", "r num hide-sm", fmt(r.best)));
+      tb.append(tr);
+    });
+  }
+  function renderFeed() {
+    var list = Object.keys(matches).map(function (k) { return matches[k]; }).sort(function (a, b) { return b.t - a.t; }).slice(0, 12);
+    var ul = $("feed"); ul.textContent = "";
+    $("feedEmpty").hidden = list.length > 0;
+    list.forEach(function (m) {
+      var li = h("li", "fm");
+      var aw = m.a.total > m.b.total, bw = m.b.total > m.a.total;
+      var A = h("div", "side a" + (aw ? " won" : "")); A.append(h("span", "nm", m.a.name), h("span", "sc", fmt(m.a.total)));
+      var B = h("div", "side b" + (bw ? " won" : "")); B.append(h("span", "nm", m.b.name), h("span", "sc", fmt(m.b.total)));
+      var w = aw ? m.a : bw ? m.b : null;
+      var meta = w ? w.name + " won · " + (w.delta >= 0 ? "+" : "−") + Math.abs(w.delta) + " rating · " + ago(m.t) : "Draw · " + ago(m.t);
+      li.append(A, h("span", "vs", "vs"), B, h("div", "meta", meta));
+      ul.append(li);
+    });
+  }
+
+  /* ---------- Events ---------- */
+  $("nameInput").addEventListener("change", function () {
+    var n = cleanName($("nameInput").value);
+    if (!n) { $("nameInput").value = me.name; return; }
+    me.name = n; saveProfile(); announce(); pubRanked(); toast("Name saved.");
+  });
+  $("findBtn").addEventListener("click", findMatch);
+  $("practiceBtn").addEventListener("click", function () { startMatch({ online: false }); });
+  $("cancelSearch").addEventListener("click", stopSearch);
+  $("composeForm").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var v = $("egoInput").value;
+    if (!v.trim()) return;
+    submitText(v); $("egoInput").value = "";
+  });
+  $("egoInput").addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); $("composeForm").requestSubmit(); }
+  });
+  var leaveArm = 0;
+  $("leaveBtn").addEventListener("click", function () {
+    if (!match) return;
+    if (!match.online) { endRound(false); return; }
+    if (Date.now() - leaveArm < 3000) { endRound(true); return; }
+    leaveArm = Date.now(); $("leaveBtn").textContent = "Tap again to forfeit";
+    setTimeout(function () { if (match && match.online) $("leaveBtn").textContent = "Forfeit"; }, 3000);
+  });
+  $("againBtn").addEventListener("click", findMatch);
+  $("lobbyBtn").addEventListener("click", function () { showScreen("lobby"); });
+  setInterval(renderFeed, 60000);
+
+  renderMe(); renderBoard(); renderFeed(); setNet("connecting");
+  connect();
+})();
+</script>
+</body>
+</html>
