@@ -191,6 +191,12 @@ tr.you td { background: rgba(245,196,81,.08); }
 .tag { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
 .tag.plus b { color: var(--good); } .tag.minus b { color: var(--bad); } .tag.mult b { color: var(--gold); }
 .tag.used { text-decoration: line-through; opacity: .7; }
+.tag.roast { border-color: var(--pink); color: var(--fg); }
+.tag.roast b { color: var(--pink); }
+.entry.roasted { border: 1px solid var(--bad); border-radius: 10px; padding: 10px 12px; background: rgba(255,143,107,.08); }
+.entry.roasted .txt::before { content: "ROASTED \00b7 "; font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--bad); }
+.score.shake { animation: shake .5s; color: var(--bad); }
+@keyframes shake { 0%,100% { transform: none; } 20% { transform: translateX(-6px) rotate(-2deg); } 40% { transform: translateX(6px) rotate(2deg); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
 .entry.fresh { animation: slide .35s ease-out; }
 @keyframes slide { from { transform: translateY(-6px); opacity: .2; } to { transform: none; opacity: 1; } }
 .match-foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
@@ -307,6 +313,7 @@ tr.you td { background: rgba(245,196,81,.08); }
             <li>Bragging about yourself in one sentence doubles it. Each "!" adds 0.4×, up to 3×.</li>
             <li>Claiming you're better than Dempsey pays +8,000 once per match. Praising Dempsey costs 4,000.</li>
             <li>Humble words (sorry, maybe, thanks, we, team) cost points.</li>
+            <li>Roast your rival: aim an insult at them ("you", "your", or their name) and they lose points. Each insult only works once per match, and "!" makes it hit harder.</li>
             <li>Ratings start at 1,000. Beating a higher-rated player earns more.</li>
           </ul>
         </details>
@@ -478,6 +485,14 @@ tr.you td { background: rgba(245,196,81,.08); }
     probably: -300, kinda: -300, average: -800, okay: -200, ok: -200, normal: -500,
     you: -150, your: -150, they: -100
   };
+  var ROAST = {
+    loser: 1500, clown: 1500, mid: 1200, trash: 1400, garbage: 1400, ugly: 1200, dumb: 1200, stupid: 1200,
+    idiot: 1400, weak: 1000, boring: 900, cringe: 1200, lame: 900, bozo: 1500, nerd: 800, noob: 1200,
+    fraud: 1500, washed: 1300, npc: 1300, peasant: 1300, basic: 800, pathetic: 1400, irrelevant: 1300,
+    slow: 700, smelly: 900, fake: 1000, wannabe: 1300, dork: 900, goofy: 900, suck: 1000, sucks: 1000,
+    worst: 1200, worse: 900, clueless: 1100, embarrassing: 1200, joke: 1000, flop: 1100, failure: 1300
+  };
+  var ROAST_CAP = 15000;
   var PHRASES = [
     { re: /of all time/, pts: 2500, label: "of all time" },
     { re: /\b(no ?one|nobody) (can|could|will|is)\b/, pts: 1800, label: "nobody can" },
@@ -500,16 +515,28 @@ tr.you td { background: rgba(245,196,81,.08); }
   }
 
   // `used` holds brag words/phrases this player already cashed in this match.
-  function scoreSentence(raw, used) {
+  // `oppName` is the rival's name in a ranked match (null in practice).
+  function scoreSentence(raw, used, oppName) {
     var text = raw.trim().slice(0, 300);
     var norm = text.replace(/’/g, "'");
     var lower = norm.toLowerCase();
-    var tags = [], base = 0, hasSelf = false, hasBrag = false, here = {};
+    var tags = [], base = 0, hasSelf = false, hasBrag = false, here = {}, roast = 0;
+    var targeted = /\b(you|your|yours|you're|youre|ur|u|rival|opponent)\b/.test(lower) ||
+      (!!oppName && lower.indexOf(oppName.toLowerCase()) >= 0);
     (norm.match(/[A-Za-z0-9'\/]+/g) || []).forEach(function (ow) {
       var w = ow.toLowerCase();
       if (here[w]) return; here[w] = 1;
+      if (ROAST[w] != null) {
+        if (!targeted) return;
+        if (used["r:" + w]) tags.push(["used", "roast: " + w, "used"]);
+        else { used["r:" + w] = 1; roast += ROAST[w]; }
+        return;
+      }
       if (SELF[w] != null) { base += SELF[w]; hasSelf = true; tags.push(["plus", ow, SELF[w]]); return; }
-      if (HUMBLE[w] != null) { base += HUMBLE[w]; tags.push(["minus", w, HUMBLE[w]]); return; }
+      if (HUMBLE[w] != null) {
+        if (targeted && (w === "you" || w === "your")) return; // aiming at the rival isn't humble
+        base += HUMBLE[w]; tags.push(["minus", w, HUMBLE[w]]); return;
+      }
       var v = BRAG[w], label = w;
       if (v == null && w.length > 4 && /est$/.test(w) && !EST_SKIP[w]) { v = 600; label = w + " (-est)"; }
       if (v != null) {
@@ -540,8 +567,13 @@ tr.you td { background: rgba(245,196,81,.08); }
     var bangs = (raw.match(/!/g) || []).length;
     if (bangs > 0 && base > 0) { var m = Math.min(3, 1 + 0.4 * bangs); mult *= m; tags.push(["mult", "!".repeat(Math.min(bangs, 6)), "×" + m.toFixed(1)]); }
     var pts = Math.max(-20000, Math.min(25000, Math.round(base * mult)));
+    if (roast > 0) {
+      roast = Math.min(ROAST_CAP, Math.round(roast * Math.min(3, 1 + 0.4 * bangs)));
+      if (oppName) tags.push(["roast", "roast → " + oppName, "−" + fmt(roast)]);
+      else { tags.push(["roast", "roast (no rival in practice)", "0"]); roast = 0; }
+    }
     if (!tags.length) tags.push(["", "no ego detected", 0]);
-    return { text: text, pts: pts, tags: tags };
+    return { text: text, pts: pts, tags: tags, roast: roast };
   }
 
   /* ---------- UI helpers ---------- */
@@ -825,10 +857,11 @@ tr.you td { background: rgba(245,196,81,.08); }
       if (key.split(" ").length < 2) { rejected++; return; }
       if (match.keys[key]) { rejected++; return; }
       match.keys[key] = 1;
-      var r = scoreSentence(s, match.used);
+      var r = scoreSentence(s, match.used, match.online ? match.oppInfo.name : null);
       match.my = Math.max(0, match.my + r.pts); gained += r.pts; added++;
       match.mine.push(r);
-      if (match.online) pub(BASE + "/match/" + match.mid + "/" + me.id, { type: "line", text: r.text, pts: r.pts, total: match.my }, false, 1);
+      if (match.online) pub(BASE + "/match/" + match.mid + "/" + me.id, { type: "line", text: r.text, pts: r.pts, total: match.my, roast: r.roast }, false, 1);
+      if (r.roast > 0) { toast("Roasted " + match.oppInfo.name + " for −" + fmt(r.roast) + "!"); popup($("oppScore"), -r.roast); }
     });
     if (rejected) toast(added ? rejected + " repeated or too-short sentence" + (rejected > 1 ? "s" : "") + " skipped. No repeats." : "Already said. Repeats don't count, so brag about something new.");
     if (added) { popup($("egoInput"), gained); renderMatch(added); }
@@ -838,10 +871,22 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (d.type === "line") {
       var text = String(d.text || "").slice(0, 300), pts = num(d.pts, -20000, 60000, 0);
       if (!text) return;
-      m.theirs.push({ text: text, pts: pts });
+      var dmg = num(d.roast, 0, ROAST_CAP, 0) | 0;
+      m.theirs.push({ text: text, pts: pts, roast: dmg });
       m.keys[sentenceKey(text)] = 1;
       m.their = num(d.total, 0, 1e7, m.their);
-      renderMatch(0, true);
+      if (dmg > 0 && m.phase !== "done" && m.phase !== "waiting") {
+        m.my = Math.max(0, m.my - dmg);
+        m.mine.push({ text: m.oppInfo.name + ": “" + text + "”", pts: -dmg, tags: [["minus", "you got roasted", -dmg]], roasted: true });
+        pub(BASE + "/match/" + m.mid + "/" + me.id, { type: "hit", total: m.my }, false, 1);
+        toast(m.oppInfo.name + " roasted you! −" + fmt(dmg));
+        popup($("youScore"), -dmg);
+        var ys = $("youScore"); ys.classList.remove("shake"); void ys.offsetWidth; ys.classList.add("shake");
+        renderMatch(1, true);
+      } else renderMatch(0, true);
+    } else if (d.type === "hit") {
+      m.their = num(d.total, 0, 1e7, m.their);
+      renderMatch();
     } else if (d.type === "final") {
       m.their = num(d.total, 0, 1e7, m.their); m.oppFinal = m.their;
       if (d.forfeit && m.phase !== "done") {
@@ -868,7 +913,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     }
     var log = $("myLog"); log.textContent = "";
     m.mine.slice().reverse().forEach(function (e, i) {
-      var li = h("li", "entry" + (i < (freshMine || 0) ? " fresh" : ""));
+      var li = h("li", "entry" + (i < (freshMine || 0) ? " fresh" : "") + (e.roasted ? " roasted" : ""));
       li.append(h("div", "txt", e.text), h("div", "pts " + (e.pts >= 0 ? "up" : "down"), (e.pts >= 0 ? "+" : "−") + fmt(Math.abs(e.pts))));
       var tg = h("div", "tags"); renderTags(tg, e.tags); li.append(tg);
       log.append(li);
@@ -878,7 +923,9 @@ tr.you td { background: rgba(245,196,81,.08); }
       var ol = $("oppLog"); ol.textContent = "";
       m.theirs.slice().reverse().forEach(function (e, i) {
         var li = h("li", "entry" + (freshTheirs && i === 0 ? " fresh" : ""));
-        li.append(h("div", "txt", e.text), h("div", "pts " + (e.pts >= 0 ? "up" : "down"), (e.pts >= 0 ? "+" : "−") + fmt(Math.abs(e.pts))));
+        if (e.roast > 0 && e.pts === 0) li.append(h("div", "txt", e.text), h("div", "pts down", "roast"));
+        else li.append(h("div", "txt", e.text), h("div", "pts " + (e.pts >= 0 ? "up" : "down"), (e.pts >= 0 ? "+" : "−") + fmt(Math.abs(e.pts))));
+        if (e.roast > 0) { var tg = h("div", "tags"); renderTags(tg, [["roast", "roasted you", "−" + fmt(e.roast)]]); li.append(tg); }
         ol.append(li);
       });
       $("oppEmpty").hidden = m.theirs.length > 0;

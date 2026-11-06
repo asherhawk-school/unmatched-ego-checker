@@ -8,6 +8,7 @@ An online bragging battle. Type sentences about yourself; the scanner turns each
 
 - **Ranked matches:** press *Find ranked match* and you're paired with another player in the queue. Ratings start at 1,000 and use Elo (K = 32).
 - **No repeats:** a sentence that you or your rival already said is rejected, and each brag word only scores once per match.
+- **Roasts:** aim an insult at your rival ("you", "your", or their name) and they lose points. Each insult works once per match; "!" makes it hit harder (max 15,000 per roast).
 - **Leaderboard and match feed** are shared by everyone who plays.
 - **Practice solo** works offline and doesn't change your rating.
 
