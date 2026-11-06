@@ -261,6 +261,23 @@ tr.you td { background: rgba(245,196,81,.08); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before { animation: none !important; transition: none !important; }
 }
+/* Accounts */
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+.auth-tabs button { background: transparent; color: var(--muted); padding: 9px 10px; border-radius: 9px; font-weight: 500; }
+.auth-tabs button[aria-selected="true"] { background: var(--panel2); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field input {
+  font: inherit; font-size: 17px; color: var(--fg);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%;
+}
+.field input:focus { outline: none; border-color: var(--gold); }
+.auth-err { margin: 0; color: var(--bad); font-size: 14.5px; min-height: 1.4em; }
+.hint { margin: 0; color: var(--muted); font-size: 14px; }
+.who { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.who .nm { font-family: var(--display); font-size: 28px; color: var(--pink); line-height: 1.1; overflow-wrap: anywhere; }
+.linkish { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 4px; font-size: 14px; }
+.linkish:hover { color: var(--fg); }
+.notes { grid-column: 1 / -1; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -287,35 +304,62 @@ tr.you td { background: rgba(245,196,81,.08); }
   <main id="screen-lobby">
     <div class="lobby">
       <section class="panel">
-        <p class="lede">Brag in full sentences. The scanner turns each one into <b>ego points</b>. Win ranked 2-minute matches to climb the leaderboard. Pass <b>100,000</b> and you'll almost be unmatched. Dempsey is still ahead.</p>
-        <div class="name-row">
-          <label class="cap" for="nameInput">Your name</label>
-          <input id="nameInput" maxlength="20" autocomplete="off" spellcheck="false">
+        <p class="lede">Brag in full sentences. The scanner rates each one in <b>ego points</b>. Win ranked 2-minute matches to climb the leaderboard. Pass <b>100,000</b> and you'll almost be unmatched. Dempsey is still ahead.</p>
+
+        <!-- Signed out -->
+        <div id="authBox" class="actions">
+          <div class="auth-tabs" role="tablist">
+            <button type="button" role="tab" id="tabIn" aria-selected="true">Sign in</button>
+            <button type="button" role="tab" id="tabUp" aria-selected="false">Create account</button>
+          </div>
+          <form id="authForm" class="actions" autocomplete="on">
+            <div class="field">
+              <label class="cap" for="authName">Username</label>
+              <input id="authName" name="username" autocomplete="username" maxlength="20" spellcheck="false" autocapitalize="off">
+            </div>
+            <div class="field">
+              <label class="cap" for="authPw">Password</label>
+              <input id="authPw" name="password" type="password" autocomplete="current-password" maxlength="100">
+            </div>
+            <div class="field" id="pw2Field" hidden>
+              <label class="cap" for="authPw2">Repeat password</label>
+              <input id="authPw2" type="password" autocomplete="new-password" maxlength="100">
+            </div>
+            <p class="auth-err" id="authErr" role="alert"></p>
+            <button class="btn-gold" type="submit" id="authBtn">Sign in</button>
+          </form>
+          <p class="hint" id="authHint">Ranked matches need an account. Practice works without one.</p>
         </div>
-        <div>
-          <div class="cap">Ranked rating</div>
-          <div class="rating-big"><span class="num" id="meRating">1,000</span></div>
-        </div>
-        <div class="stats">
-          <div class="stat"><span class="cap">Record</span><span class="num" id="meRecord">0W · 0L · 0D</span></div>
-          <div class="stat"><span class="cap">Best score</span><span class="num" id="meBest">0</span></div>
-        </div>
-        <div class="actions">
+
+        <!-- Signed in -->
+        <div id="meBox" class="actions" hidden>
+          <div class="who">
+            <span class="nm" id="meName">You</span>
+            <button class="linkish" type="button" id="signOutBtn">Sign out</button>
+          </div>
+          <div>
+            <div class="cap">Ranked rating</div>
+            <div class="rating-big"><span class="num" id="meRating">1,000</span></div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="cap">Record</span><span class="num" id="meRecord">0W · 0L · 0D</span></div>
+            <div class="stat"><span class="cap">Best score</span><span class="num" id="meBest">0</span></div>
+          </div>
           <button class="btn-gold" id="findBtn" type="button" disabled>Find ranked match</button>
-          <button class="btn-line" id="practiceBtn" type="button">Practice solo</button>
         </div>
+
+        <button class="btn-line" id="practiceBtn" type="button">Practice solo</button>
+
         <details class="rules">
-          <summary>How scoring works</summary>
+          <summary>How it works</summary>
           <ul>
-            <li>Talking about yourself (I, me, my, myself) earns points in every sentence.</li>
-            <li>Brag words like genius, legend, flawless and GOAT score big, but each one only counts once per match. Use it again and it scores nothing.</li>
-            <li>No repeats: a sentence that you or your rival already said is rejected. Rewording with the same words doesn't count either.</li>
-            <li>Bragging about yourself in one sentence doubles it. Each "!" adds 0.4×, up to 3×.</li>
-            <li>SHOUTING a brag word in caps adds a small +250 bonus, once per sentence. Random caps gibberish scores nothing.</li>
-            <li>Claiming you're better than Dempsey pays +8,000 once per match. Praising Dempsey costs 4,000.</li>
-            <li>Humble words (sorry, maybe, thanks, we, team) cost points.</li>
-            <li>Roast your rival: aim an insult at them ("you", "your", or their name) and they lose points. Each insult only works once per match, and "!" makes it hit harder.</li>
-            <li>Ratings start at 1,000. Beating a higher-rated player earns more.</li>
+            <li>Brag about yourself in full sentences. The scanner decides how impressive each one is. The exact scoring is secret.</li>
+            <li>Every brag word only impresses once per match. Find new ways to show off.</li>
+            <li>No repeats: a sentence that you or your rival already said is rejected.</li>
+            <li>One sentence every 2 seconds. Punctuation and caps don't earn extra points.</li>
+            <li>Roast your rival (aim an insult at "you" or their name) to knock their score down.</li>
+            <li>Humble talk costs you points.</li>
+            <li>Ratings start at 1,000. Only your first 3 matches against the same rival each day count for rating.</li>
           </ul>
         </details>
       </section>
@@ -329,7 +373,7 @@ tr.you td { background: rgba(245,196,81,.08); }
               <tbody id="boardBody"></tbody>
             </table>
           </div>
-          <p class="empty" id="boardEmpty">No ranked matches yet. Play one and you're on the board.</p>
+          <p class="empty" id="boardEmpty">No ranked matches yet. Create an account and play one to get on the board.</p>
         </section>
         <section class="panel">
           <h2 class="sec">Recent ranked matches</h2>
@@ -368,8 +412,8 @@ tr.you td { background: rgba(245,196,81,.08); }
         <div class="goal-row"><span>Road to 100k</span><span>Dempsey: off the chart</span></div>
       </div>
       <form class="compose" id="composeForm" autocomplete="off">
-        <label class="cap" for="egoInput" style="flex-basis:100%">Brag. Enter to send. No repeats.</label>
-        <textarea id="egoInput" placeholder="I am the most flawless legend in the galaxy!!!"></textarea>
+        <label class="cap" for="egoInput" style="flex-basis:100%">One brag every 2 seconds. Enter to send. No repeats.</label>
+        <textarea id="egoInput" maxlength="200" placeholder="I am the most flawless legend in the galaxy"></textarea>
         <button class="btn-gold" type="submit" id="sendBtn">Scan it</button>
       </form>
       <div class="banner" id="matchBanner" hidden>
@@ -440,144 +484,72 @@ tr.you td { background: rgba(245,196,81,.08); }
   var BASE = "uec-ego-v1";
   var BROKER = "wss://broker.hivemq.com:8884/mqtt";
   var ROUND_MS = 120000, GOAL = 100000, K = 32;
-  var LINE_MAX = 25000;          // most a single sentence can score
-  var MAX_BEST = 1000000;        // no honest 2-minute match gets near this
-  var BLOCKED = { u1fniyk50onp: 1 }; // banned for posting hacked scores
-  function plausibleRecord(r) { return r.best <= MAX_BEST && Math.abs(r.rating - 1000) <= K * r.games + 1; }
+  var LINE_MAX = 25000, ROAST_CAP = 8000, MAX_BEST = 1000000;
+  var COOLDOWN_MS = 2000, RIVAL_MIN_GAP = 1500;
+  var PW_ITER = 150000, SAME_RIVAL_PER_DAY = 3;
+  // Banned for hacked scores or win farming.
+  var BLOCKED = { u1fniyk50onp: 1, taz1326tmjp9: 1, "0ffq1jhun3j7": 1 };
+  var BANNED_NAMES = { dempseyprimeform: 1, johnego: 1, smugcrown52: 1 };
 
   var $ = function (id) { return document.getElementById(id); };
   var fmt = function (n) { return Math.round(n).toLocaleString("en-US"); };
   function num(x, min, max, d) { x = Number(x); return isFinite(x) ? Math.min(max, Math.max(min, x)) : d; }
-  function cleanName(s) { return String(s == null ? "" : s).replace(/[\u0000-\u001f]/g, "").trim().slice(0, 20); }
+  function cleanName(s) { return String(s == null ? "" : s).replace(/[^A-Za-z0-9_]/g, "").slice(0, 20); }
   function safeId(s) { return String(s || "").replace(/[^a-z0-9]/gi, "").slice(0, 24); }
   function rid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
   function h(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   var reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  /* ---------- Profile (kept in this browser) ---------- */
   var slot = (new URLSearchParams(location.search).get("p") || "").replace(/[^a-z0-9]/gi, "").slice(0, 8);
-  var PKEY = "uec-profile" + (slot ? "-" + slot : "");
-  var ADJ = ["Vain", "Smug", "Gilded", "Mighty", "Royal", "Shiny", "Flawless", "Grand"];
-  var NOUN = ["Peacock", "Mirror", "Crown", "Legend", "Diva", "Icon", "Lion", "Star"];
-  function randomName() { return ADJ[Math.random() * ADJ.length | 0] + NOUN[Math.random() * NOUN.length | 0] + (10 + Math.random() * 90 | 0); }
-  function loadProfile() { try { var p = JSON.parse(localStorage.getItem(PKEY)); if (p && p.id) return p; } catch (e) {} return null; }
-  function saveProfile() { try { localStorage.setItem(PKEY, JSON.stringify(me)); } catch (e) {} }
-  var me = loadProfile() || { id: rid(), name: randomName(), rating: 1000, wins: 0, losses: 0, draws: 0, best: 0, games: 0 };
-  saveProfile();
+  var SFX = slot ? "-" + slot : "";
 
-  /* ---------- Scoring ---------- */
-  var SELF = { i: 250, me: 200, my: 250, mine: 400, myself: 900, "i'm": 350, im: 350, "i've": 250, "i'll": 250, "i'd": 200 };
-  var BRAG = {
-    best: 1200, greatest: 1500, genius: 1500, legend: 1500, legendary: 1500, perfect: 1300, perfection: 1300,
-    flawless: 1400, amazing: 900, awesome: 800, incredible: 1000, brilliant: 1200, smartest: 1500,
-    king: 1300, queen: 1300, god: 2000, goat: 2000, champion: 1200, champ: 1000, unbeatable: 1600,
-    undefeated: 1500, unstoppable: 1500, iconic: 1200, icon: 1100, superior: 1300, elite: 1100,
-    rich: 900, handsome: 900, beautiful: 900, gorgeous: 1000, talented: 1000, gifted: 1000,
-    boss: 900, winner: 900, win: 400, wins: 400, star: 800, superstar: 1300, mastermind: 1500,
-    master: 1000, special: 700, chosen: 1200, magnificent: 1300, majestic: 1200, royal: 1000,
-    famous: 900, cool: 500, smart: 700, strong: 600, strongest: 1400, fastest: 1400,
-    unmatched: 1800, unrivaled: 1800, untouchable: 1600, prodigy: 1400, hero: 900,
-    destroy: 800, dominate: 1100, dominated: 1100, carry: 600, carried: 700, always: 300, never: 300,
-    obviously: 600, clearly: 500, ever: 400, everyone: 500, everybody: 500, worship: 1800, admire: 900,
-    jealous: 1200, envy: 1000, slay: 900, goated: 2000, "10/10": 1200, perfectly: 900, legendary: 1500,
-    phenomenal: 1300, spectacular: 1200, extraordinary: 1300, invincible: 1600, supreme: 1500, emperor: 1400,
-    empress: 1400, celebrity: 1000, glorious: 1200, dazzling: 1000, stunning: 1000, epic: 800, flex: 900
-  };
-  var HUMBLE = {
-    sorry: -900, apologize: -900, apologise: -900, maybe: -500, perhaps: -500, humble: -1200, modest: -1200,
-    thanks: -500, thank: -500, grateful: -700, please: -300, we: -300, us: -300, our: -300, team: -500,
-    together: -400, help: -300, learn: -400, learning: -400, wrong: -800, mistake: -700, mistakes: -700,
-    probably: -300, kinda: -300, average: -800, okay: -200, ok: -200, normal: -500,
-    you: -150, your: -150, they: -100
-  };
-  var ROAST = {
-    loser: 1500, clown: 1500, mid: 1200, trash: 1400, garbage: 1400, ugly: 1200, dumb: 1200, stupid: 1200,
-    idiot: 1400, weak: 1000, boring: 900, cringe: 1200, lame: 900, bozo: 1500, nerd: 800, noob: 1200,
-    fraud: 1500, washed: 1300, npc: 1300, peasant: 1300, basic: 800, pathetic: 1400, irrelevant: 1300,
-    slow: 700, smelly: 900, fake: 1000, wannabe: 1300, dork: 900, goofy: 900, suck: 1000, sucks: 1000,
-    worst: 1200, worse: 900, clueless: 1100, embarrassing: 1200, joke: 1000, flop: 1100, failure: 1300
-  };
-  var ROAST_CAP = 15000;
-  var PHRASES = [
-    { re: /of all time/, pts: 2500, label: "of all time" },
-    { re: /\b(no ?one|nobody) (can|could|will|is)\b/, pts: 1800, label: "nobody can" },
-    { re: /bow down/, pts: 3000, label: "bow down" },
-    { re: /in the (world|universe|galaxy|history)/, pts: 2000, label: "in the world" },
-    { re: /\bbetter than (everyone|everybody|all)/, pts: 2500, label: "better than everyone" },
-    { re: /\bmain character\b/, pts: 2200, label: "main character" },
-    { re: /\bi('m| am) (just )?(that|him|her)\b/, pts: 2200, label: "I'm just that" }
-  ];
-  var EST_SKIP = {};
-  "test rest west best guest honest interest forest request suggest modest contest protest chest nest pest quest vest zest invest arrest harvest digest latest biggest manifest dearest earnest attest greatest smartest strongest fastest lest jest crest".split(" ").forEach(function (w) { EST_SKIP[w] = 1; });
-
-  function splitSentences(text) {
-    return (text.match(/[^.!?]+[.!?]*/g) || []).map(function (s) { return s.trim(); }).filter(function (s) { return /[a-z]/i.test(s); });
-  }
+  /* ---------- Scoring (word table is hashed so it can't be read) ---------- */
+  var T = {"723wz7":"s","1v73mum":"s","1pnbkz6":"s","eqvbv7":"s","eealpg":"s","1bp9c8z":"s","1syu7ay":"s","1x9i9tt":"s","1to8kes":"s","1dn6k3s":"s","1d37ddy":"b12","1x7tcn3":"b15","djqrtp":"b15","h7y7o9":"b15","lw3f5h":"b15","hbyltp":"b13","1fzh891":"b13","sfap5v":"b14","uvc3yv":"b9","19cn6nz":"b8","wu6lzz":"b10","2wc0tn":"b12","2zh2eb":"b15","citn9j":"b13","mynfrm":"b13","17aomwm":"b20","aj3wj7":"b20","162s5of":"b12","1b44qx7":"b10","12e8msr":"b16","5ycum9":"b15","zg0o1l":"b15","ci4gy1":"b12","o5813t":"b11","5iacz7":"b13","d68gdv":"b11","b8ps4u":"b9","nseyt9":"b9","11kiv1f":"b9","1kri7t1":"b10","1hm1ynj":"b10","7heshb":"b10","tzuq49":"b9","1gzt767":"b9","lzibk6":"b4","e3q04v":"b4","7eqx8o":"b8","o9re27":"b13","1oyst56":"b15","n9ae2m":"b10","19ggnub":"b7","g0e98y":"b12","8d6hql":"b13","28l03c":"b12","1soku7n":"b10","1weuflp":"b9","1xlsrkp":"b5","japsd5":"b7","mvagyn":"b6","1fgeya1":"b14","ubwcvi":"b14","365vul":"b18","vpp7zo":"b18","1jtvi0m":"b16","1genwog":"b14","a5kyqw":"b9","1l2p1hu":"b8","1acnm01":"b11","hox5en":"b11","1ldxmqn":"b6","pl787i":"b7","1i29s5x":"b3","9s66k2":"b3","qkh7kq":"b6","sr3srq":"b5","fr1vsg":"b4","1ma0z4p":"b5","t6rtxv":"b5","29j7ae":"b18","17xyjfu":"b9","1qpwus5":"b12","zihl6y":"b10","1cl6ewx":"b9","15ht48i":"b20","1t9sjta":"b9","192fhup":"b13","16gmn5r":"b12","1unh3ik":"b13","179u45d":"b16","1f8ix9j":"b15","1s80au4":"b14","illc65":"b14","1kspp6p":"b10","gvjl7u":"b12","id908n":"b10","1hhzee":"b10","1h20s05":"b8","vhsf07":"b9","56fgxh":"h9","qfbedu":"h9","truwt3":"h9","qtcvg":"h5","ikbwph":"h5","48wcn3":"h12","jfk2as":"h12","1be7vgh":"h5","4rpn1k":"h5","12b7zhu":"h7","69mhfa":"h3","1la0ra0":"h3","1mxs2fw":"h3","8m2xly":"h3","1y12c6p":"h5","59sbui":"h4","6kb9bv":"h3","1l8syf2":"h4","1gcq842":"h4","18xppcd":"h8","1vksq1c":"h7","36ftsp":"h7","uui4nv":"h3","16xe78h":"h3","18yrk0v":"h8","1o14py0":"h2","1knr93e":"h2","1qwf7yj":"h5","r4v8w3":"h1","19ug23n":"h1","1e8fmem":"h1","10ameq1":"r15","1dxuqjt":"r15","g1gppu":"r12","evegc2":"r14","hbtj4b":"r14","1nt2m5j":"r12","qwpg6w":"r12","9c35sn":"r12","12qwz0v":"r14","1wqy8ts":"r10","1kcdrh1":"r9","t4za5i":"r12","1lcff81":"r9","11sge8s":"r15","149ffo3":"r8","kpqwdq":"r12","1u4zxay":"r15","1cfrjza":"r13","1bl335r":"r13","1yqyl0k":"r13","1keujwe":"r8","8ztfki":"r14","18al0fe":"r13","1fdaygd":"r7","11hsila":"r9","1277e5t":"r10","a5md9e":"r13","1tkmm52":"r9","1bd99tm":"r9","188v1qq":"r10","1svs20j":"r10","notvd7":"r12","runwrs":"r9","xgzxa4":"r11","1vl8jkw":"r12","peb3mn":"r10","uef4tx":"r11","1t9zb0q":"r13","1ywdpgs":"x","1j51frq":"x","1qvu127":"x","1kprs1k":"x","95fb5f":"x","1ligaiq":"x","90uwj5":"x","f9dwop":"x","1xtpy8i":"x","15wyczc":"x","jn3ocn":"x","sgq3e5":"x","19954nm":"x","6szijs":"x","u5d5lm":"x","1e676h6":"x","ol9omm":"x","1rac005":"x","145nezh":"x","wkf2fd":"x","6ahx9c":"x","3wwi4j":"x","1csu3p9":"x","kfwrp0":"x","qe0qh6":"x","1sqiyr1":"x","axofck":"x","1uw54ta":"x","12n0m2r":"x","1wtajff":"p25","1g57e4t":"p18","1s4bo3h":"p18","17a5e1f":"p18","147zoc6":"p18","19w40v9":"p18","11tlz1p":"p18","1gb01c0":"p30","1g66bkg":"p20","v3j033":"p20","1qqckos":"p20","15w21jz":"p20","j6dga2":"p25","1dqidee":"p25","b2ckbu":"p25","1ia9yjq":"p22","3zaoa1":"p22","1ueefr4":"p22","zt34p9":"p22","xviiuc":"p22"};
+  function hx(s) { s = "uec|" + s; var x = 0x811c9dc5; for (var i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; } return x.toString(36); }
+  function look(s) { return T[hx(s)] || null; }
   function sentenceKey(s) {
     var ws = String(s).toLowerCase().replace(/’/g, "'").match(/[a-z0-9']+/g) || [];
-    var uniq = {}; ws.forEach(function (w) { uniq[w] = 1; });
-    return Object.keys(uniq).sort().join(" ");
+    var u = {}; ws.forEach(function (w) { u[w] = 1; });
+    return Object.keys(u).sort().join(" ");
   }
-
-  // `used` holds brag words/phrases this player already cashed in this match.
-  // `oppName` is the rival's name in a ranked match (null in practice).
   function scoreSentence(raw, used, oppName) {
-    var text = raw.trim().slice(0, 300);
+    var text = String(raw).replace(/\s+/g, " ").trim().slice(0, 200);
     var norm = text.replace(/’/g, "'");
     var lower = norm.toLowerCase();
-    var tags = [], base = 0, hasSelf = false, hasBrag = false, here = {}, roast = 0, shouted = false;
+    var words = lower.match(/[a-z0-9']+/g) || [];
+    var base = 0, hasSelf = false, hasBrag = false, roast = 0, roastUsed = false, bragUsed = false, here = {}, notes = [];
     var targeted = /\b(you|your|yours|you're|youre|ur|u|rival|opponent)\b/.test(lower) ||
       (!!oppName && lower.indexOf(oppName.toLowerCase()) >= 0);
-    (norm.match(/[A-Za-z0-9'\/]+/g) || []).forEach(function (ow) {
-      var w = ow.toLowerCase();
+    words.forEach(function (w) {
       if (here[w]) return; here[w] = 1;
-      if (ROAST[w] != null) {
-        if (!targeted) return;
-        if (used["r:" + w]) tags.push(["used", "roast: " + w, "used"]);
-        else { used["r:" + w] = 1; roast += ROAST[w]; }
-        return;
-      }
-      if (SELF[w] != null) { base += SELF[w]; hasSelf = true; tags.push(["plus", ow, SELF[w]]); return; }
-      if (HUMBLE[w] != null) {
-        if (targeted && (w === "you" || w === "your")) return; // aiming at the rival isn't humble
-        base += HUMBLE[w]; tags.push(["minus", w, HUMBLE[w]]); return;
-      }
-      var v = BRAG[w], label = w;
-      if (v == null && w.length > 4 && /est$/.test(w) && !EST_SKIP[w]) { v = 600; label = w + " (-est)"; }
-      if (v != null) {
-        if (used[w]) tags.push(["used", w, "used"]);
-        else { used[w] = 1; base += v; hasBrag = true; tags.push(["plus", label, v]); }
-      }
-      // Shouting only counts on real brag words, and at most once per sentence (see below).
-      if (v != null && ow.length >= 3 && ow === ow.toUpperCase() && /[A-Z]/.test(ow)) shouted = true;
+      var c = look(w); if (!c) return;
+      var k = c.charAt(0), v = +c.slice(1) * 100;
+      if (k === "s") hasSelf = true;
+      else if (k === "r") { if (!targeted) return; if (used["r:" + w]) roastUsed = true; else { used["r:" + w] = 1; roast += v; } }
+      else if (k === "h") { if (targeted && (w === "you" || w === "your")) return; base -= v; }
+      else if (k === "b") { if (used[w]) bragUsed = true; else { used[w] = 1; base += v; hasBrag = true; } }
     });
-    PHRASES.forEach(function (p) {
-      if (!p.re.test(lower)) return;
-      var k = "p:" + p.label;
-      if (used[k]) { tags.push(["used", "“" + p.label + "”", "used"]); return; }
-      used[k] = 1; base += p.pts; hasBrag = true; tags.push(["plus", "“" + p.label + "”", p.pts]);
-    });
+    for (var n = 2; n <= 3; n++) for (var i = 0; i + n <= words.length; i++) {
+      var g = words.slice(i, i + n).join(" "), c = look(g);
+      if (c && c.charAt(0) === "p") { if (used["p:" + g]) bragUsed = true; else { used["p:" + g] = 1; base += +c.slice(1) * 100; hasBrag = true; } }
+    }
+    if (hasSelf) base += 300;
     if (/dempsey/.test(lower)) {
-      if (/(dempsey is|dempsey's) (the )?(best|greatest|better|king|goat|amazing|legend)/.test(lower) || /(love|respect|admire) dempsey/.test(lower)) {
-        base -= 4000; tags.push(["minus", "praising Dempsey", -4000]);
-      } else if (hasSelf && /(better|greater|smarter|bigger|stronger|cooler|beat|than)/.test(lower)) {
-        if (used["d:beat"]) tags.push(["used", "dethroning Dempsey", "used"]);
-        else { used["d:beat"] = 1; base += 8000; tags.push(["plus", "dethroning Dempsey", 8000]); }
-      } else if (!used["d:name"]) { used["d:name"] = 1; base += 500; tags.push(["plus", "name-dropping Dempsey", 500]); }
+      if (/(dempsey is|dempsey's) (the )?(best|greatest|better|king|goat|amazing|legend)/.test(lower) || /(love|respect|admire) dempsey/.test(lower)) { base -= 4000; notes.push("praising Dempsey hurts"); }
+      else if (hasSelf && /(better|greater|smarter|bigger|stronger|cooler|beat|than)/.test(lower)) {
+        if (used["d:beat"]) bragUsed = true; else { used["d:beat"] = 1; base += 8000; hasBrag = true; }
+      }
     }
-    var mult = 1;
-    if (hasSelf && hasBrag && base > 0) { mult *= 2; tags.push(["mult", "self + brag combo", "×2"]); }
-    var bangs = (raw.match(/!/g) || []).length;
-    if (bangs > 0 && base > 0) { var m = Math.min(3, 1 + 0.4 * bangs); mult *= m; tags.push(["mult", "!".repeat(Math.min(bangs, 6)), "×" + m.toFixed(1)]); }
-    var pts = Math.max(-20000, Math.min(25000, Math.round(base * mult)));
-    if (shouted && pts > 0) { pts = Math.min(25000, pts + 250); tags.push(["plus", "SHOUTING", 250]); }
-    if (roast > 0) {
-      roast = Math.min(ROAST_CAP, Math.round(roast * Math.min(3, 1 + 0.4 * bangs)));
-      if (oppName) tags.push(["roast", "roast → " + oppName, "−" + fmt(roast)]);
-      else { tags.push(["roast", "roast (no rival in practice)", "0"]); roast = 0; }
-    }
-    if (!tags.length) tags.push(["", "no ego detected", 0]);
-    return { text: text, pts: pts, tags: tags, roast: roast };
+    var pts = base;
+    if (hasSelf && hasBrag && pts > 0) pts *= 2;
+    pts = Math.max(-20000, Math.min(LINE_MAX, Math.round(pts)));
+    roast = Math.min(ROAST_CAP, roast);
+    if (bragUsed) notes.push("some brags were already used this match");
+    if (roastUsed) notes.push("that insult was already used");
+    if (roast > 0 && !oppName) { notes.push("no rival to roast in practice"); roast = 0; }
+    if (roast > 0) notes.push("roasted " + oppName + " −" + fmt(roast));
+    return { text: text, pts: pts, roast: roast, notes: notes };
   }
 
   /* ---------- UI helpers ---------- */
@@ -601,15 +573,6 @@ tr.you td { background: rgba(245,196,81,.08); }
       el.textContent = fmt(from + (to - from) * k);
       if (k < 1) el._raf = requestAnimationFrame(step);
     })(start);
-  }
-  function renderTags(container, tags) {
-    tags.forEach(function (t) {
-      var s = h("span", "tag " + t[0]);
-      var v = t[2];
-      var vs = typeof v === "number" ? (v > 0 ? "+" + fmt(v) : v < 0 ? "−" + fmt(-v) : "0") : v;
-      s.append(t[1] + " "); s.append(h("b", null, vs));
-      container.append(s);
-    });
   }
 
   /* ---------- Background sky + particle FX ---------- */
@@ -673,62 +636,193 @@ tr.you td { background: rgba(245,196,81,.08); }
   sizeCanvases();
   if (!reduceMotion) requestAnimationFrame(skyLoop);
 
+  /* ---------- Accounts ---------- */
+  var LKEY = "uec-login" + SFX, MADE = "uec-made" + SFX, OLD = "uec-profile" + SFX;
+  var acct = null;          // { uid, name, lower } when signed in
+  var me = null;            // stats for the signed-in account
+  var sid = null, sessionT = 0;
+  var accounts = {}, byUid = {};
+  var failCount = 0, lockUntil = 0;
+
+  function hexOf(buf) { return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }
+  function bytesOf(hex) { var a = new Uint8Array(hex.length / 2); for (var i = 0; i < a.length; i++) a[i] = parseInt(hex.substr(i * 2, 2), 16); return a; }
+  async function hashPw(pw, saltHex, iter) {
+    var key = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveBits"]);
+    var bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: bytesOf(saltHex), iterations: iter }, key, 256);
+    return hexOf(bits);
+  }
+  function freshStats() { return { rating: 1000, wins: 0, losses: 0, draws: 0, best: 0, games: 0, vs: {} }; }
+  function statsKey(uid) { return "uec-stats-" + uid + SFX; }
+  function saveStats() { if (acct) lsSet(statsKey(acct.uid), me); }
+
+  var synced = false, syncWaiters = [];
+  function whenSynced() {
+    return new Promise(function (res) {
+      if (synced) return res(true);
+      syncWaiters.push(res);
+      setTimeout(function () { res(synced); }, 8000);
+    });
+  }
+
+  async function register(name, pw, pw2) {
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(name)) throw "Usernames are 3–20 letters, numbers or underscores.";
+    if (pw.length < 6) throw "Use a password with at least 6 characters.";
+    if (pw !== pw2) throw "The two passwords don't match.";
+    if (!connected) throw "Can't reach the game server. Check your connection and try again.";
+    if (!(await whenSynced())) throw "The game server is slow right now. Try again in a moment.";
+    var lower = name.toLowerCase();
+    if (BANNED_NAMES[lower]) throw "That name isn't available.";
+    if (accounts[lower]) throw "That name is taken. Pick another, or sign in if it's yours.";
+    var made = lsGet(MADE);
+    if (made && made !== lower) throw "This device already created the account “" + made + "”. Sign in to it instead.";
+    var salt = hexOf(crypto.getRandomValues(new Uint8Array(16)));
+    var hash = await hashPw(pw, salt, PW_ITER);
+    var uid = (rid() + rid()).slice(0, 18);
+    pub(BASE + "/acct/" + lower, { v: 1, name: name, uid: uid, salt: salt, hash: hash, iter: PW_ITER, created: Date.now() }, true, 1);
+    await new Promise(function (r) { setTimeout(r, 1800); });
+    if (!accounts[lower] || accounts[lower].uid !== uid) throw "Someone just took that name. Pick another.";
+    lsSet(MADE, lower);
+    // Carry over stats from before accounts existed, then retire the old anonymous record.
+    var old = lsGet(OLD), stats = freshStats();
+    if (old && old.id && old.games > 0 && !BLOCKED[old.id]) {
+      stats = { rating: num(old.rating, 100, 5000, 1000), wins: old.wins | 0, losses: old.losses | 0, draws: old.draws | 0, best: num(old.best, 0, MAX_BEST, 0), games: old.games | 0, vs: {} };
+      pub(BASE + "/ranked/" + safeId(old.id), null, true, 1);
+      toast("Your old rating and record moved to your new account.");
+    }
+    if (old && old.id) pub(BASE + "/online/" + safeId(old.id), null, true);
+    lsSet(OLD, null);
+    signIn(accounts[lower], stats);
+  }
+
+  async function login(name, pw) {
+    if (Date.now() < lockUntil) throw "Too many wrong tries. Wait " + Math.ceil((lockUntil - Date.now()) / 1000) + " seconds.";
+    if (!name || !pw) throw "Enter your username and password.";
+    if (!connected) throw "Can't reach the game server. Check your connection and try again.";
+    if (!(await whenSynced())) throw "The game server is slow right now. Try again in a moment.";
+    var rec = accounts[name.toLowerCase()];
+    if (!rec || BLOCKED[rec.uid]) throw "No account with that username.";
+    var hsh = await hashPw(pw, rec.salt, rec.iter);
+    if (hsh !== rec.hash) {
+      failCount++;
+      if (failCount >= 5) { lockUntil = Date.now() + 30000; failCount = 0; }
+      throw "Wrong password.";
+    }
+    failCount = 0;
+    signIn(rec, null);
+  }
+
+  function signIn(rec, stats) {
+    acct = { uid: rec.uid, name: rec.name, lower: rec.name.toLowerCase() };
+    lsSet(LKEY, acct);
+    var cached = lsGet(statsKey(acct.uid)), remote = rawRanked[acct.uid];
+    me = stats || cached || freshStats();
+    if (remote && remote.games > (me.games || 0)) me = Object.assign(freshStats(), remote, { vs: (cached && cached.vs) || {} });
+    if (!me.vs) me.vs = {};
+    saveStats();
+    sid = rid(); sessionT = Date.now();
+    reconnect();
+    renderAuth(); renderMe(); renderBoard();
+  }
+
+  function signOut(msg) {
+    if (searching) stopSearch();
+    if (match && match.online && match.phase !== "done") endRound(true);
+    if (acct) pub(BASE + "/online/" + acct.uid, null, true);
+    acct = null; me = null; sid = null;
+    lsSet(LKEY, null);
+    reconnect();
+    hideOverlay(); showScreen("lobby"); renderAuth(); renderBoard();
+    if (msg) toast(msg);
+  }
+
   /* ---------- Network (free public MQTT broker) ---------- */
   var client = null, connected = false, netState = "connecting";
-  var ranked = {}, online = {}, queue = {}, matches = {};
+  var ranked = {}, rawRanked = {}, online = {}, queue = {}, matches = {};
   function pub(topic, obj, retain, qos) {
     if (!client || !connected) return;
     try { client.publish(topic, obj == null ? "" : JSON.stringify(obj), { retain: !!retain, qos: qos || 0 }); } catch (e) {}
   }
-  function announce() { pub(BASE + "/online/" + me.id, { name: me.name, rating: me.rating, t: Date.now() }, true); }
-  function pubRanked() { if (me.games > 0) pub(BASE + "/ranked/" + me.id, { name: me.name, rating: me.rating, wins: me.wins, losses: me.losses, draws: me.draws, best: me.best, games: me.games, t: Date.now() }, true, 1); }
-  function onlineCount() { var n = 0, now = Date.now(); Object.keys(online).forEach(function (k) { if (now - online[k].t < 150000) n++; }); return Math.max(n, connected ? 1 : 0); }
+  function announce() { if (acct) pub(BASE + "/online/" + acct.uid, { name: acct.name, rating: me.rating, t: Date.now() }, true); }
+  function pubRanked() {
+    if (acct && me.games > 0) pub(BASE + "/ranked/" + acct.uid, { name: acct.name, rating: me.rating, wins: me.wins, losses: me.losses, draws: me.draws, best: me.best, games: me.games, t: Date.now() }, true, 1);
+  }
+  function onlineCount() { var n = 0, now = Date.now(); Object.keys(online).forEach(function (k) { if (now - online[k].t < 150000) n++; }); return n; }
   function setNet(s) {
     netState = s;
     $("netPill").dataset.state = s;
-    $("netText").textContent = s === "online" ? "Online · " + onlineCount() + " here" : s === "connecting" ? "Connecting…" : "Offline · practice only";
-    $("findBtn").disabled = s !== "online";
-    $("againBtn").disabled = s !== "online";
+    $("netText").textContent = s === "online" ? "Online · " + onlineCount() + " signed in" : s === "connecting" ? "Connecting…" : "Offline · practice only";
+    $("findBtn").disabled = s !== "online" || !acct;
+    $("againBtn").disabled = s !== "online" || !acct;
     $("searchOnline").textContent = onlineCount();
   }
+  var heartbeat = null;
   function connect() {
     if (!window.mqtt) { setNet("offline"); return; }
-    try {
-      client = mqtt.connect(BROKER, {
-        clientId: "uec_" + me.id + "_" + Math.random().toString(36).slice(2, 7),
-        keepalive: 30, reconnectPeriod: 4000, connectTimeout: 12000, clean: true,
-        will: { topic: BASE + "/online/" + me.id, payload: "", retain: true, qos: 0 }
-      });
-    } catch (e) { setNet("offline"); return; }
-    client.on("connect", function () {
+    var opts = { clientId: "uec_" + (acct ? acct.uid : "guest") + "_" + Math.random().toString(36).slice(2, 7), keepalive: 30, reconnectPeriod: 4000, connectTimeout: 12000, clean: true };
+    if (acct) opts.will = { topic: BASE + "/online/" + acct.uid, payload: "", retain: true, qos: 0 };
+    var c;
+    try { c = mqtt.connect(BROKER, opts); } catch (e) { setNet("offline"); return; }
+    client = c;
+    c.on("connect", function () {
+      if (c !== client) return;
       connected = true;
-      client.subscribe([BASE + "/ranked/+", BASE + "/online/+", BASE + "/matches/+", BASE + "/queue/+", BASE + "/inbox/" + me.id], { qos: 1 });
-      if (match && match.online) client.subscribe(BASE + "/match/" + match.mid + "/+", { qos: 1 });
+      var subs = [BASE + "/acct/+", BASE + "/ranked/+", BASE + "/online/+", BASE + "/matches/+", BASE + "/queue/+"];
+      if (acct) {
+        subs.push(BASE + "/inbox/" + acct.uid);
+        pub(BASE + "/session/" + acct.uid, { sid: sid, t: sessionT }, true, 1);
+        subs.push(BASE + "/session/" + acct.uid);
+      }
+      if (match && match.online) subs.push(BASE + "/match/" + match.mid + "/+");
+      c.subscribe(subs, { qos: 1 });
       announce(); pubRanked();
       setNet("online");
+      if (!synced) setTimeout(function () { synced = true; syncWaiters.splice(0).forEach(function (f) { f(true); }); renderBoard(); renderFeed(); }, 2500);
     });
-    client.on("close", function () { connected = false; setNet("connecting"); });
-    client.on("offline", function () { connected = false; setNet("offline"); });
-    client.on("error", function () {});
-    client.on("message", onMsg);
-    setInterval(announce, 45000);
-    setTimeout(function () { if (!connected) setNet("offline"); }, 15000);
+    c.on("close", function () { if (c === client) { connected = false; setNet("connecting"); } });
+    c.on("offline", function () { if (c === client) { connected = false; setNet("offline"); } });
+    c.on("error", function () {});
+    c.on("message", function (t, p) { if (c === client) onMsg(t, p); });
   }
+  function reconnect() {
+    if (client) { var old = client; client = null; connected = false; try { old.end(true); } catch (e) {} }
+    connect();
+  }
+  heartbeat = setInterval(announce, 45000);
+  setTimeout(function () { if (!connected) setNet("offline"); }, 15000);
   window.addEventListener("beforeunload", function () {
-    if (searching) pub(BASE + "/queue/" + me.id, null, true);
-    pub(BASE + "/online/" + me.id, null, true);
+    if (!acct) return;
+    if (searching) pub(BASE + "/queue/" + acct.uid, null, true);
+    pub(BASE + "/online/" + acct.uid, null, true);
   });
 
   function onMsg(topic, payload) {
     var p = topic.split("/"); if (p[0] !== BASE) return;
-    var kind = p[1], id = safeId(p[2]), d = null, s = payload ? payload.toString() : "";
+    var kind = p[1], id = p[2] || "", d = null, s = payload ? payload.toString() : "";
     if (s) { try { d = JSON.parse(s); } catch (e) { return; } if (!d || typeof d !== "object") return; }
+    if (kind === "acct") {
+      var lower = String(id).toLowerCase().replace(/[^a-z0-9_]/g, "");
+      if (!d) return; // accounts are never deleted by players
+      var rec = { name: cleanName(d.name), uid: safeId(d.uid), salt: String(d.salt || "").replace(/[^0-9a-f]/g, ""), hash: String(d.hash || "").replace(/[^0-9a-f]/g, ""), iter: num(d.iter, 10000, 1000000, PW_ITER) | 0, created: num(d.created, 0, 9e15, 0) };
+      if (!rec.uid || rec.name.toLowerCase() !== lower || rec.salt.length !== 32 || rec.hash.length !== 64 || BLOCKED[rec.uid]) return;
+      var prev = accounts[lower];
+      if (prev && prev.uid !== rec.uid && prev.created <= rec.created) return; // first claim keeps the name
+      if (prev) delete byUid[prev.uid];
+      accounts[lower] = rec; byUid[rec.uid] = rec;
+      if (synced) renderBoard();
+      return;
+    }
+    id = safeId(id);
     if (BLOCKED[id] || (kind === "match" && BLOCKED[safeId(p[3])])) return;
-    if (kind === "ranked") {
-      if (!d) delete ranked[id];
+    if (kind === "session") {
+      if (acct && id === acct.uid && d && d.sid !== sid && num(d.t, 0, 9e15, 0) > sessionT) {
+        signOut("You signed in on another device, so you were signed out here.");
+      }
+    } else if (kind === "ranked") {
+      if (!d) { delete ranked[id]; delete rawRanked[id]; }
       else {
-        var rec = { name: cleanName(d.name) || "Someone", rating: num(d.rating, 0, 5000, 1000), wins: num(d.wins, 0, 1e6, 0) | 0, losses: num(d.losses, 0, 1e6, 0) | 0, draws: num(d.draws, 0, 1e6, 0) | 0, best: num(d.best, 0, 1e9, 0), games: num(d.games, 0, 1e6, 0) | 0 };
-        if (plausibleRecord(rec)) ranked[id] = rec; else delete ranked[id];
+        var r = { rating: num(d.rating, 0, 5000, 1000), wins: num(d.wins, 0, 1e6, 0) | 0, losses: num(d.losses, 0, 1e6, 0) | 0, draws: num(d.draws, 0, 1e6, 0) | 0, best: num(d.best, 0, 1e9, 0), games: num(d.games, 0, 1e6, 0) | 0 };
+        rawRanked[id] = r;
+        if (r.best <= MAX_BEST && Math.abs(r.rating - 1000) <= K * r.games + 1) ranked[id] = r; else delete ranked[id];
       }
       renderBoard();
     } else if (kind === "online") {
@@ -737,22 +831,22 @@ tr.you td { background: rgba(245,196,81,.08); }
         if (match && match.online && match.oppInfo.id === id && (match.phase === "live" || match.phase === "countdown")) {
           match.oppForfeit = true; toast(match.oppInfo.name + " left the match. You win by forfeit."); endRound(false);
         }
-      } else online[id] = { name: cleanName(d.name), t: num(d.t, 0, 9e15, 0) };
+      } else online[id] = { t: num(d.t, 0, 9e15, 0) };
       setNet(netState);
     } else if (kind === "queue") {
-      if (!d) delete queue[id]; else queue[id] = { name: cleanName(d.name) || "Someone", rating: num(d.rating, 0, 5000, 1000), t: num(d.t, 0, 9e15, 0) };
+      if (!d) delete queue[id]; else queue[id] = { rating: num(d.rating, 0, 5000, 1000), t: num(d.t, 0, 9e15, 0) };
       if (searching) tryPair();
     } else if (kind === "matches") {
       if (!d) delete matches[id];
       else {
-        var side = function (x) { x = x || {}; return { id: safeId(x.id), name: cleanName(x.name) || "Someone", total: num(x.total, 0, 1e9, 0), delta: num(x.delta, -100, 100, 0) }; };
+        var side = function (x) { x = x || {}; return { id: safeId(x.id), total: num(x.total, 0, 1e9, 0), delta: num(x.delta, -100, 100, 0) }; };
         var mr = { t: num(d.t, 0, 9e15, 0), a: side(d.a), b: side(d.b) };
         var fair = function (x) { return !BLOCKED[x.id] && x.total <= MAX_BEST && Math.abs(x.delta) <= K; };
         if (fair(mr.a) && fair(mr.b)) matches[id] = mr; else delete matches[id];
       }
-      renderFeed();
+      if (synced) renderFeed();
     } else if (kind === "inbox") {
-      if (id === me.id && d) onInbox(d);
+      if (acct && id === acct.uid && d) onInbox(d);
     } else if (kind === "match") {
       if (d && match && match.online && id === match.mid && safeId(p[3]) === match.oppInfo.id) handleOpp(d);
     }
@@ -761,6 +855,7 @@ tr.you td { background: rgba(245,196,81,.08); }
   /* ---------- Matchmaking ---------- */
   var searching = null;
   function findMatch() {
+    if (!acct) { toast("Sign in or create an account to play ranked."); showScreen("lobby"); $("authName").focus(); return; }
     if (!connected) { toast("Can't reach the game server right now. Practice solo while it reconnects."); return; }
     if (searching || match) return;
     searching = { since: Date.now(), pending: null };
@@ -771,38 +866,39 @@ tr.you td { background: rgba(245,196,81,.08); }
     showScreen("lobby"); showOverlay("search");
     tryPair();
   }
-  function pubQueue() { pub(BASE + "/queue/" + me.id, { name: me.name, rating: me.rating, t: Date.now() }, true); }
+  function pubQueue() { pub(BASE + "/queue/" + acct.uid, { rating: me.rating, t: Date.now() }, true); }
   function stopSearch() {
     if (!searching) return;
     clearInterval(searching.hb); clearInterval(searching.clock); clearTimeout(searching.pendingT);
-    pub(BASE + "/queue/" + me.id, null, true);
+    if (acct) pub(BASE + "/queue/" + acct.uid, null, true);
     searching = null; hideOverlay();
   }
   function tryPair() {
-    if (!searching || searching.pending) return;
+    if (!searching || searching.pending || !acct) return;
     var now = Date.now();
-    var cands = Object.keys(queue).filter(function (id) { return id !== me.id && me.id < id && now - queue[id].t < 45000; })
+    var cands = Object.keys(queue).filter(function (id) { return id !== acct.uid && byUid[id] && acct.uid < id && now - queue[id].t < 45000; })
       .sort(function (a, b) { return Math.abs(queue[a].rating - me.rating) - Math.abs(queue[b].rating - me.rating); });
     if (!cands.length) return;
-    var oid = cands[0], q = queue[oid];
+    var oid = cands[0];
     var mid = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     searching.pending = { mid: mid, oid: oid };
-    pub(BASE + "/inbox/" + oid, { type: "invite", mid: mid, from: me.id, name: me.name, rating: me.rating }, false, 1);
+    pub(BASE + "/inbox/" + oid, { type: "invite", mid: mid, from: acct.uid, rating: me.rating }, false, 1);
     searching.pendingT = setTimeout(function () {
       if (searching && searching.pending && searching.pending.mid === mid) { searching.pending = null; delete queue[oid]; tryPair(); }
     }, 6000);
   }
   function onInbox(d) {
     var from = safeId(d.from), mid = safeId(d.mid);
-    if (!from || !mid || BLOCKED[from] || from === me.id) return;
-    var opp = { id: from, name: cleanName(d.name) || "Rival", rating: num(d.rating, 0, 5000, 1000) };
+    // Only real accounts, never yourself, never banned players.
+    if (!from || !mid || BLOCKED[from] || from === acct.uid || !byUid[from]) return;
+    var opp = { id: from, name: byUid[from].name, rating: num(d.rating, 0, 5000, 1000) };
     if (d.type === "invite") {
       var ok = !!searching && !match && !searching.pending;
-      pub(BASE + "/inbox/" + from, { type: ok ? "accept" : "decline", mid: mid, from: me.id, name: me.name, rating: me.rating }, false, 1);
+      pub(BASE + "/inbox/" + from, { type: ok ? "accept" : "decline", mid: mid, from: acct.uid, rating: me.rating }, false, 1);
       if (ok) { stopSearch(); startMatch({ online: true, mid: mid, host: false, oppInfo: opp }); }
     } else if (d.type === "accept") {
-      if (searching && searching.pending && searching.pending.mid === mid) { stopSearch(); startMatch({ online: true, mid: mid, host: true, oppInfo: opp }); }
-      else pub(BASE + "/inbox/" + from, { type: "cancel", mid: mid, from: me.id }, false, 1);
+      if (searching && searching.pending && searching.pending.mid === mid && searching.pending.oid === from) { stopSearch(); startMatch({ online: true, mid: mid, host: true, oppInfo: opp }); }
+      else pub(BASE + "/inbox/" + from, { type: "cancel", mid: mid, from: acct.uid }, false, 1);
     } else if (d.type === "decline") {
       if (searching && searching.pending && searching.pending.mid === mid) { clearTimeout(searching.pendingT); searching.pending = null; setTimeout(tryPair, 400); }
     } else if (d.type === "cancel") {
@@ -817,10 +913,10 @@ tr.you td { background: rgba(245,196,81,.08); }
   /* ---------- Match ---------- */
   var match = null;
   function startMatch(o) {
-    match = { online: o.online, mid: o.mid, host: o.host, oppInfo: o.oppInfo || null, my: 0, their: 0, mine: [], theirs: [], keys: {}, used: {}, phase: "countdown", oppFinal: null, oppForfeit: false, forfeit: false, ratingAtStart: me.rating, celebrated: false };
+    match = { online: o.online, mid: o.mid, host: o.host, oppInfo: o.oppInfo || null, my: 0, their: 0, mine: [], theirs: [], keys: {}, used: {}, phase: "countdown", oppFinal: null, oppForfeit: false, forfeit: false, ratingAtStart: me ? me.rating : 1000, celebrated: false, lastSend: 0, oppLast: 0 };
     if (o.online && client) client.subscribe(BASE + "/match/" + o.mid + "/+", { qos: 1 });
-    $("youName").textContent = me.name;
-    $("youRating").textContent = o.online ? "You · " + fmt(me.rating) : "You";
+    $("youName").textContent = acct ? acct.name : "You";
+    $("youRating").textContent = o.online ? "You · " + fmt(me.rating) : "Practice";
     $("oppSide").hidden = !o.online; $("tug").hidden = !o.online; $("oppCol").hidden = !o.online;
     $("cols").classList.toggle("solo", !o.online);
     if (o.online) { $("oppName").textContent = o.oppInfo.name; $("oppRating").textContent = "Rival · " + fmt(o.oppInfo.rating); $("oppColCap").textContent = o.oppInfo.name + "'s sentences"; }
@@ -829,10 +925,10 @@ tr.you td { background: rgba(245,196,81,.08); }
     $("youScore")._v = 0; $("oppScore")._v = 0;
     $("egoInput").value = ""; $("egoInput").disabled = false; $("sendBtn").disabled = false;
     $("waitNote").hidden = true; $("matchBanner").hidden = true;
-    $("timer").classList.remove("hurry"); setTimer(o.online ? 1 : 1, o.online ? String(ROUND_MS / 1000) : "∞");
+    $("timer").classList.remove("hurry"); setTimer(1, o.online ? String(ROUND_MS / 1000) : "∞");
     showScreen("match"); renderMatch();
     if (o.online) {
-      $("countVs").textContent = me.name + "  vs  " + o.oppInfo.name;
+      $("countVs").textContent = acct.name + "  vs  " + o.oppInfo.name;
       countdown(function () { match.phase = "live"; match.endsAt = Date.now() + ROUND_MS; tick(); $("egoInput").focus(); });
     } else { match.phase = "live"; $("egoInput").focus(); }
   }
@@ -860,36 +956,38 @@ tr.you td { background: rgba(245,196,81,.08); }
     match.tickT = setTimeout(tick, 200);
   }
   function submitText(text) {
-    if (!match || match.phase !== "live") return;
-    var parts = splitSentences(text), rejected = 0, added = 0, gained = 0;
-    parts.forEach(function (s) {
-      var key = sentenceKey(s);
-      if (key.split(" ").length < 2) { rejected++; return; }
-      if (match.keys[key]) { rejected++; return; }
-      match.keys[key] = 1;
-      var r = scoreSentence(s, match.used, match.online ? match.oppInfo.name : null);
-      match.my = Math.max(0, match.my + r.pts); gained += r.pts; added++;
-      match.mine.push(r);
-      if (match.online) pub(BASE + "/match/" + match.mid + "/" + me.id, { type: "line", text: r.text, pts: r.pts, total: match.my, roast: r.roast }, false, 1);
-      if (r.roast > 0) { toast("Roasted " + match.oppInfo.name + " for −" + fmt(r.roast) + "!"); popup($("oppScore"), -r.roast); }
-    });
-    if (rejected) toast(added ? rejected + " repeated or too-short sentence" + (rejected > 1 ? "s" : "") + " skipped. No repeats." : "Already said. Repeats don't count, so brag about something new.");
-    if (added) { popup($("egoInput"), gained); renderMatch(added); }
+    var m = match;
+    if (!m || m.phase !== "live") return;
+    var now = Date.now();
+    if (now - m.lastSend < COOLDOWN_MS) { toast("Slow down. One brag every 2 seconds."); return false; }
+    var key = sentenceKey(text);
+    if (key.split(" ").length < 2) { toast("Use a full sentence."); return false; }
+    if (m.keys[key]) { toast("Already said. No repeats, so brag about something new."); return false; }
+    m.keys[key] = 1; m.lastSend = now;
+    var r = scoreSentence(text, m.used, m.online ? m.oppInfo.name : null);
+    m.my = Math.max(0, m.my + r.pts);
+    m.mine.push(r);
+    if (m.online) pub(BASE + "/match/" + m.mid + "/" + acct.uid, { type: "line", text: r.text, pts: r.pts, total: m.my, roast: r.roast }, false, 1);
+    if (r.roast > 0) { toast("Roasted " + m.oppInfo.name + " for −" + fmt(r.roast) + "!"); popup($("oppScore"), -r.roast); }
+    popup($("egoInput"), r.pts);
+    renderMatch(1);
+    return true;
   }
   function handleOpp(d) {
-    var m = match;
+    var m = match, now = Date.now();
     if (d.type === "line") {
-      var text = String(d.text || "").slice(0, 300), pts = num(d.pts, -20000, LINE_MAX, 0);
+      var text = String(d.text || "").replace(/\s+/g, " ").slice(0, 200), pts = num(d.pts, -20000, LINE_MAX, 0);
       if (!text) return;
+      if (now - m.oppLast < RIVAL_MIN_GAP) pts = Math.min(pts, 0); // faster than the cooldown allows: no points
+      m.oppLast = now;
       var dmg = num(d.roast, 0, ROAST_CAP, 0) | 0;
       m.theirs.push({ text: text, pts: pts, roast: dmg });
       m.keys[sentenceKey(text)] = 1;
-      // A rival's total can only grow by what one sentence can score.
-      m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their + Math.max(0, pts));
+      m.their = Math.min(num(d.total, 0, 1e9, m.their), Math.max(0, m.their + pts));
       if (dmg > 0 && m.phase !== "done" && m.phase !== "waiting") {
         m.my = Math.max(0, m.my - dmg);
-        m.mine.push({ text: m.oppInfo.name + ": “" + text + "”", pts: -dmg, tags: [["minus", "you got roasted", -dmg]], roasted: true });
-        pub(BASE + "/match/" + m.mid + "/" + me.id, { type: "hit", total: m.my }, false, 1);
+        m.mine.push({ text: m.oppInfo.name + ": “" + text + "”", pts: -dmg, notes: ["you got roasted"], roasted: true });
+        pub(BASE + "/match/" + m.mid + "/" + acct.uid, { type: "hit", total: m.my }, false, 1);
         toast(m.oppInfo.name + " roasted you! −" + fmt(dmg));
         popup($("youScore"), -dmg);
         var ys = $("youScore"); ys.classList.remove("shake"); void ys.offsetWidth; ys.classList.add("shake");
@@ -899,7 +997,7 @@ tr.you td { background: rgba(245,196,81,.08); }
       m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their);
       renderMatch();
     } else if (d.type === "final") {
-      m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their + LINE_MAX); m.oppFinal = m.their;
+      m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their); m.oppFinal = m.their;
       if (d.forfeit && m.phase !== "done") {
         m.oppForfeit = true; toast(m.oppInfo.name + " forfeited. You win.");
         if (m.phase === "live" || m.phase === "countdown") { endRound(false); return; }
@@ -926,7 +1024,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     m.mine.slice().reverse().forEach(function (e, i) {
       var li = h("li", "entry" + (i < (freshMine || 0) ? " fresh" : "") + (e.roasted ? " roasted" : ""));
       li.append(h("div", "txt", e.text), h("div", "pts " + (e.pts >= 0 ? "up" : "down"), (e.pts >= 0 ? "+" : "−") + fmt(Math.abs(e.pts))));
-      var tg = h("div", "tags"); renderTags(tg, e.tags); li.append(tg);
+      if (e.notes && e.notes.length) li.append(h("div", "notes", e.notes.join(" · ")));
       log.append(li);
     });
     $("myEmpty").hidden = m.mine.length > 0;
@@ -934,9 +1032,8 @@ tr.you td { background: rgba(245,196,81,.08); }
       var ol = $("oppLog"); ol.textContent = "";
       m.theirs.slice().reverse().forEach(function (e, i) {
         var li = h("li", "entry" + (freshTheirs && i === 0 ? " fresh" : ""));
-        if (e.roast > 0 && e.pts === 0) li.append(h("div", "txt", e.text), h("div", "pts down", "roast"));
-        else li.append(h("div", "txt", e.text), h("div", "pts " + (e.pts >= 0 ? "up" : "down"), (e.pts >= 0 ? "+" : "−") + fmt(Math.abs(e.pts))));
-        if (e.roast > 0) { var tg = h("div", "tags"); renderTags(tg, [["roast", "roasted you", "−" + fmt(e.roast)]]); li.append(tg); }
+        li.append(h("div", "txt", e.text), h("div", "pts " + (e.pts >= 0 ? "up" : "down"), (e.pts >= 0 ? "+" : "−") + fmt(Math.abs(e.pts))));
+        if (e.roast > 0) li.append(h("div", "notes", "roasted you −" + fmt(e.roast)));
         ol.append(li);
       });
       $("oppEmpty").hidden = m.theirs.length > 0;
@@ -950,30 +1047,41 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (!m.online) { m.phase = "done"; showResult({ practice: true, my: m.my }); return; }
     m.phase = "waiting"; m.forfeit = !!forfeit;
     setTimer(0, "0");
-    pub(BASE + "/match/" + m.mid + "/" + me.id, { type: "final", total: m.my, forfeit: !!forfeit }, false, 1);
+    pub(BASE + "/match/" + m.mid + "/" + acct.uid, { type: "final", total: m.my, forfeit: !!forfeit }, false, 1);
     if (forfeit || m.oppForfeit || m.oppFinal != null) finish();
     else { $("waitNote").hidden = false; m.waitT = setTimeout(finish, 6000); }
   }
   function finish() {
     var m = match; if (!m || m.phase === "done") return;
     m.phase = "done"; clearTimeout(m.waitT);
-    var result = m.forfeit ? 0 : m.oppForfeit ? 1 : m.my > m.their ? 1 : m.my < m.their ? 0 : 0.5;
-    var expected = 1 / (1 + Math.pow(10, (m.oppInfo.rating - m.ratingAtStart) / 400));
-    var delta = Math.round(K * (result - expected));
-    me.rating = Math.max(100, me.rating + delta); me.games++;
-    if (result === 1) me.wins++; else if (result === 0) me.losses++; else me.draws++;
-    me.best = Math.max(me.best, m.my);
-    saveProfile(); pubRanked(); announce();
-    if (m.host) pub(BASE + "/matches/" + m.mid, { t: Date.now(), a: { id: me.id, name: me.name, total: m.my, delta: delta }, b: { id: m.oppInfo.id, name: m.oppInfo.name, total: m.their, delta: -delta } }, true, 1);
     if (client) client.unsubscribe(BASE + "/match/" + m.mid + "/+");
-    showResult({ result: result, delta: delta, my: m.my, their: m.their, opp: m.oppInfo, forfeit: m.forfeit, oppForfeit: m.oppForfeit });
+    var result = m.forfeit ? 0 : m.oppForfeit ? 1 : m.my > m.their ? 1 : m.my < m.their ? 0 : 0.5;
+    // Anti-farming: nobody bragged = no contest; only 3 rated matches per rival per day.
+    var unrated = null;
+    if (!m.mine.some(function (e) { return !e.roasted; }) && !m.theirs.length) unrated = "Nobody bragged, so this match doesn't count.";
+    var dayAgo = Date.now() - 86400000;
+    var hist = (me.vs[m.oppInfo.id] || []).filter(function (t) { return t > dayAgo; });
+    if (!unrated && hist.length >= SAME_RIVAL_PER_DAY) unrated = "Unrated: you've already played " + m.oppInfo.name + " 3 times today.";
+    var delta = 0;
+    if (!unrated) {
+      var expected = 1 / (1 + Math.pow(10, (m.oppInfo.rating - m.ratingAtStart) / 400));
+      delta = Math.round(K * (result - expected));
+      me.rating = Math.max(100, me.rating + delta); me.games++;
+      if (result === 1) me.wins++; else if (result === 0) me.losses++; else me.draws++;
+      me.best = Math.max(me.best, Math.min(m.my, MAX_BEST));
+      hist.push(Date.now());
+      if (m.host) pub(BASE + "/matches/" + m.mid, { t: Date.now(), a: { id: acct.uid, total: m.my, delta: delta }, b: { id: m.oppInfo.id, total: m.their, delta: -delta } }, true, 1);
+    }
+    me.vs[m.oppInfo.id] = hist;
+    saveStats(); pubRanked(); announce();
+    showResult({ result: result, delta: delta, unrated: unrated, my: m.my, their: m.their, opp: m.oppInfo, forfeit: m.forfeit, oppForfeit: m.oppForfeit });
   }
   function showResult(r) {
     hideOverlay();
     var v = $("verdict");
-    v.classList.toggle("lose", !r.practice && r.result === 0);
+    v.classList.toggle("lose", !r.practice && !r.unrated && r.result === 0);
     $("vYou").textContent = fmt(r.my);
-    $("vYouLbl").textContent = me.name;
+    $("vYouLbl").textContent = acct ? acct.name : "You";
     $("vOppBox").hidden = !!r.practice;
     $("vBanner").hidden = r.my <= GOAL;
     if (r.practice) {
@@ -982,60 +1090,97 @@ tr.you td { background: rgba(245,196,81,.08); }
       $("vDelta").textContent = ""; $("vDelta").className = "delta";
     } else {
       $("vOpp").textContent = fmt(r.their); $("vOppLbl").textContent = r.opp.name;
-      $("vWord").textContent = r.result === 1 ? "Victory" : r.result === 0 ? "Defeat" : "Draw";
+      $("vWord").textContent = r.unrated && !r.my && !r.their ? "No contest" : r.result === 1 ? "Victory" : r.result === 0 ? "Defeat" : "Draw";
       $("vSub").textContent = r.forfeit ? "You forfeited." : r.oppForfeit ? r.opp.name + " left early, so the win is yours." : r.result === 1 ? "Your ego outshone " + r.opp.name + "'s." : r.result === 0 ? r.opp.name + " bragged harder this time." : "Two equally enormous egos.";
-      $("vDelta").textContent = "Rating " + fmt(me.rating) + " (" + (r.delta >= 0 ? "+" : "−") + Math.abs(r.delta) + ")";
-      $("vDelta").className = "delta " + (r.delta >= 0 ? "up" : "down");
+      if (r.unrated) { $("vDelta").textContent = r.unrated; $("vDelta").className = "delta"; }
+      else {
+        $("vDelta").textContent = "Rating " + fmt(me.rating) + " (" + (r.delta >= 0 ? "+" : "−") + Math.abs(r.delta) + ")";
+        $("vDelta").className = "delta " + (r.delta >= 0 ? "up" : "down");
+      }
     }
     $("againBtn").textContent = r.practice ? "Find ranked match" : "Find another match";
     showScreen("result"); renderMe();
-    if (!r.practice && r.result === 1) confetti();
+    if (!r.practice && !r.unrated && r.result === 1) confetti();
     match = null;
   }
 
   /* ---------- Lobby rendering ---------- */
+  var authMode = "in";
+  function setAuthMode(mode) {
+    authMode = mode;
+    $("tabIn").setAttribute("aria-selected", String(mode === "in"));
+    $("tabUp").setAttribute("aria-selected", String(mode === "up"));
+    $("pw2Field").hidden = mode !== "up";
+    $("authPw").setAttribute("autocomplete", mode === "up" ? "new-password" : "current-password");
+    $("authBtn").textContent = mode === "up" ? "Create account" : "Sign in";
+    $("authHint").textContent = mode === "up" ? "Pick carefully: your username can't be changed, and each device can create one account." : "Ranked matches need an account. Practice works without one.";
+    $("authErr").textContent = "";
+  }
+  function renderAuth() {
+    $("authBox").hidden = !!acct; $("meBox").hidden = !acct;
+    setNet(netState);
+  }
   function renderMe() {
+    if (!acct) return;
+    $("meName").textContent = acct.name;
     $("meRating").textContent = fmt(me.rating);
     $("meRecord").textContent = me.wins + "W · " + me.losses + "L · " + me.draws + "D";
     $("meBest").textContent = fmt(me.best);
-    if (document.activeElement !== $("nameInput")) $("nameInput").value = me.name;
   }
   function renderBoard() {
-    var ids = Object.keys(ranked).filter(function (id) { return ranked[id].games > 0; })
+    var ids = Object.keys(ranked).filter(function (id) { return ranked[id].games > 0 && byUid[id] && !BLOCKED[id]; })
       .sort(function (a, b) { return ranked[b].rating - ranked[a].rating; }).slice(0, 25);
     var tb = $("boardBody"); tb.textContent = "";
     $("boardEmpty").hidden = ids.length > 0;
     ids.forEach(function (id, i) {
-      var r = ranked[id];
-      var tr = h("tr", (id === me.id ? "you " : "") + (i < 3 ? "top" + (i + 1) : ""));
+      var r = ranked[id], mine = acct && id === acct.uid;
+      var tr = h("tr", (mine ? "you " : "") + (i < 3 ? "top" + (i + 1) : ""));
       tr.append(h("td", "rk", i < 3 ? ["♛1", "♛2", "♛3"][i] : String(i + 1)));
-      var nm = h("td", null, r.name); if (id === me.id) nm.append(h("span", "you-tag", "you"));
+      var nm = h("td", null, byUid[id].name); if (mine) nm.append(h("span", "you-tag", "you"));
       tr.append(nm, h("td", "r num", fmt(r.rating)), h("td", "r num", r.wins + "–" + r.losses), h("td", "r num hide-sm", fmt(r.best)));
       tb.append(tr);
     });
   }
   function renderFeed() {
-    var list = Object.keys(matches).map(function (k) { return matches[k]; }).sort(function (a, b) { return b.t - a.t; }).slice(0, 12);
+    var list = Object.keys(matches).map(function (k) { return matches[k]; })
+      .filter(function (m) { return byUid[m.a.id] && byUid[m.b.id]; })
+      .sort(function (a, b) { return b.t - a.t; }).slice(0, 12);
     var ul = $("feed"); ul.textContent = "";
     $("feedEmpty").hidden = list.length > 0;
     list.forEach(function (m) {
       var li = h("li", "fm");
+      var an = byUid[m.a.id].name, bn = byUid[m.b.id].name;
       var aw = m.a.total > m.b.total, bw = m.b.total > m.a.total;
-      var A = h("div", "side a" + (aw ? " won" : "")); A.append(h("span", "nm", m.a.name), h("span", "sc", fmt(m.a.total)));
-      var B = h("div", "side b" + (bw ? " won" : "")); B.append(h("span", "nm", m.b.name), h("span", "sc", fmt(m.b.total)));
-      var w = aw ? m.a : bw ? m.b : null;
-      var meta = w ? w.name + " won · " + (w.delta >= 0 ? "+" : "−") + Math.abs(w.delta) + " rating · " + ago(m.t) : "Draw · " + ago(m.t);
+      var A = h("div", "side a" + (aw ? " won" : "")); A.append(h("span", "nm", an), h("span", "sc", fmt(m.a.total)));
+      var B = h("div", "side b" + (bw ? " won" : "")); B.append(h("span", "nm", bn), h("span", "sc", fmt(m.b.total)));
+      var w = aw ? m.a : bw ? m.b : null, wn = aw ? an : bn;
+      var meta = w ? wn + " won · " + (w.delta >= 0 ? "+" : "−") + Math.abs(w.delta) + " rating · " + ago(m.t) : "Draw · " + ago(m.t);
       li.append(A, h("span", "vs", "vs"), B, h("div", "meta", meta));
       ul.append(li);
     });
   }
 
   /* ---------- Events ---------- */
-  $("nameInput").addEventListener("change", function () {
-    var n = cleanName($("nameInput").value);
-    if (!n) { $("nameInput").value = me.name; return; }
-    me.name = n; saveProfile(); announce(); pubRanked(); toast("Name saved.");
+  $("tabIn").addEventListener("click", function () { setAuthMode("in"); });
+  $("tabUp").addEventListener("click", function () { setAuthMode("up"); });
+  var authBusy = false;
+  $("authForm").addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    if (authBusy) return;
+    authBusy = true; $("authBtn").disabled = true; $("authErr").textContent = "";
+    var label = $("authBtn").textContent; $("authBtn").textContent = authMode === "up" ? "Creating…" : "Signing in…";
+    try {
+      var name = $("authName").value.trim(), pw = $("authPw").value;
+      if (authMode === "up") await register(name, pw, $("authPw2").value);
+      else await login(name, pw);
+      $("authPw").value = ""; $("authPw2").value = "";
+      toast("Signed in as " + acct.name + ".");
+    } catch (e) {
+      $("authErr").textContent = typeof e === "string" ? e : "Something went wrong. Try again.";
+    }
+    authBusy = false; $("authBtn").disabled = false; $("authBtn").textContent = label;
   });
+  $("signOutBtn").addEventListener("click", function () { signOut("Signed out."); });
   $("findBtn").addEventListener("click", findMatch);
   $("practiceBtn").addEventListener("click", function () { startMatch({ online: false }); });
   $("cancelSearch").addEventListener("click", stopSearch);
@@ -1043,11 +1188,12 @@ tr.you td { background: rgba(245,196,81,.08); }
     ev.preventDefault();
     var v = $("egoInput").value;
     if (!v.trim()) return;
-    submitText(v); $("egoInput").value = "";
+    if (submitText(v)) $("egoInput").value = "";
   });
   $("egoInput").addEventListener("keydown", function (ev) {
     if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); $("composeForm").requestSubmit(); }
   });
+  $("egoInput").addEventListener("paste", function (ev) { ev.preventDefault(); toast("Type your brags. Pasting is off."); });
   var leaveArm = 0;
   $("leaveBtn").addEventListener("click", function () {
     if (!match) return;
@@ -1058,9 +1204,25 @@ tr.you td { background: rgba(245,196,81,.08); }
   });
   $("againBtn").addEventListener("click", findMatch);
   $("lobbyBtn").addEventListener("click", function () { showScreen("lobby"); });
-  setInterval(renderFeed, 60000);
+  setInterval(function () { if (synced) renderFeed(); }, 60000);
 
-  renderMe(); renderBoard(); renderFeed(); setNet("connecting");
+  // Restore a saved sign-in (this also takes over the session from any other device).
+  setAuthMode("in");
+  var saved = lsGet(LKEY);
+  if (saved && saved.uid && !BLOCKED[saved.uid]) {
+    acct = { uid: safeId(saved.uid), name: cleanName(saved.name), lower: cleanName(saved.name).toLowerCase() };
+    me = lsGet(statsKey(acct.uid)) || freshStats(); if (!me.vs) me.vs = {};
+    sid = rid(); sessionT = Date.now();
+    whenSynced().then(function () {
+      if (!acct) return;
+      var rec = accounts[acct.lower];
+      if (!rec || rec.uid !== acct.uid) { signOut("Your saved sign-in is no longer valid. Please sign in again."); return; }
+      var remote = rawRanked[acct.uid];
+      if (remote && remote.games > me.games) { me = Object.assign(freshStats(), remote, { vs: me.vs }); saveStats(); }
+      renderMe();
+    });
+  }
+  renderAuth(); renderMe(); renderBoard(); renderFeed(); setNet("connecting");
   connect();
 })();
 </script>
