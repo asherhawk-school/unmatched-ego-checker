@@ -278,6 +278,20 @@ tr.you td { background: rgba(245,196,81,.08); }
 .linkish { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 4px; font-size: 14px; }
 .linkish:hover { color: var(--fg); }
 .notes { grid-column: 1 / -1; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+/* Profiles */
+.name-btn { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: inherit; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name-btn:hover { text-decoration-color: currentColor; }
+.profile-card { width: min(460px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; text-align: left; position: relative; }
+.profile-card .x { position: absolute; top: 12px; right: 12px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 50%; width: 36px; height: 36px; font-size: 18px; line-height: 1; }
+.profile-card .pname { font-family: var(--display); font-size: 32px; color: var(--pink); line-height: 1.1; margin: 0; padding-right: 44px; overflow-wrap: anywhere; }
+.profile-card .since { color: var(--muted); font-size: 14px; margin: 0; }
+.profile-card .rating-big .num { font-size: 40px; }
+.pstats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.plist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.plist li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 14.5px; }
+.plist li:first-child { border-top: 0; }
+.plist .res { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.plist .res.w { color: var(--good); } .plist .res.l { color: var(--bad); }
 </style>
 </head>
 <body>
@@ -359,7 +373,8 @@ tr.you td { background: rgba(245,196,81,.08); }
             <li>One sentence every 2 seconds. Punctuation and caps don't earn extra points.</li>
             <li>Roast your rival (aim an insult at "you" or their name) to knock their score down.</li>
             <li>Humble talk costs you points.</li>
-            <li>Ratings start at 1,000. Only your first 3 matches against the same rival each day count for rating.</li>
+            <li>Ratings start at 1,000 and climb slowly: up to 20 points a match for your first 10 games, then up to 12. Only your first 3 matches against the same rival each day count.</li>
+            <li>Click any player's name to see their profile.</li>
           </ul>
         </details>
       </section>
@@ -402,7 +417,7 @@ tr.you td { background: rgba(245,196,81,.08); }
         </div>
         <div class="fighter opp" id="oppSide">
           <span class="cap" id="oppRating">Rival</span>
-          <span class="nm" id="oppName">Rival</span>
+          <button class="nm name-btn" type="button" id="oppName" title="View profile">Rival</button>
           <span class="score" id="oppScore">0</span>
         </div>
       </div>
@@ -475,6 +490,26 @@ tr.you td { background: rgba(245,196,81,.08); }
     <div class="count" id="countNum">3</div>
   </div>
 </div>
+<div class="overlay" id="profileOv" hidden>
+  <section class="panel profile-card" role="dialog" aria-modal="true" aria-labelledby="pName">
+    <button class="x" type="button" id="pClose" aria-label="Close profile">&times;</button>
+    <h2 class="pname" id="pName">Player</h2>
+    <p class="since" id="pSince"></p>
+    <div>
+      <div class="cap">Ranked rating</div>
+      <div class="rating-big"><span class="num" id="pRating">1,000</span></div>
+    </div>
+    <div class="pstats">
+      <div class="stat"><span class="cap">Record</span><span class="num" id="pRecord">0W · 0L · 0D</span></div>
+      <div class="stat"><span class="cap">Win rate</span><span class="num" id="pRate">–</span></div>
+      <div class="stat"><span class="cap">Best score</span><span class="num" id="pBest">0</span></div>
+      <div class="stat"><span class="cap">Status</span><span class="num" id="pStatus">Offline</span></div>
+    </div>
+    <div class="cap">Recent ranked matches</div>
+    <ul class="plist" id="pMatches"></ul>
+    <p class="empty" id="pNoMatches">No ranked matches yet.</p>
+  </section>
+</div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
@@ -483,7 +518,10 @@ tr.you td { background: rgba(245,196,81,.08); }
   "use strict";
   var BASE = "uec-ego-v1";
   var BROKER = "wss://broker.hivemq.com:8884/mqtt";
-  var ROUND_MS = 120000, GOAL = 100000, K = 32;
+  var ROUND_MS = 120000, GOAL = 100000;
+  // Rating moves slowly: up to 20 a match while you're new, then up to 12.
+  var K_NEW = 20, K_SETTLED = 12, K = K_NEW;
+  function kFor(games) { return games < 10 ? K_NEW : K_SETTLED; }
   var LINE_MAX = 25000, ROAST_CAP = 8000, MAX_BEST = 1000000;
   var COOLDOWN_MS = 2000, RIVAL_MIN_GAP = 1500;
   var PW_ITER = 150000, SAME_RIVAL_PER_DAY = 3;
@@ -656,6 +694,12 @@ tr.you td { background: rgba(245,196,81,.08); }
   function saveStats() { if (acct) lsSet(statsKey(acct.uid), me); }
 
   var synced = false, syncWaiters = [];
+  function whenConnected() {
+    return new Promise(function (res) {
+      var start = Date.now();
+      (function check() { if (connected) res(true); else if (Date.now() - start > 12000) res(false); else setTimeout(check, 250); })();
+    });
+  }
   function whenSynced() {
     return new Promise(function (res) {
       if (synced) return res(true);
@@ -668,7 +712,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (!/^[A-Za-z0-9_]{3,20}$/.test(name)) throw "Usernames are 3–20 letters, numbers or underscores.";
     if (pw.length < 6) throw "Use a password with at least 6 characters.";
     if (pw !== pw2) throw "The two passwords don't match.";
-    if (!connected) throw "Can't reach the game server. Check your connection and try again.";
+    if (!(await whenConnected())) throw "Can't reach the game server. Check your connection and try again.";
     if (!(await whenSynced())) throw "The game server is slow right now. Try again in a moment.";
     var lower = name.toLowerCase();
     if (BANNED_NAMES[lower]) throw "That name isn't available.";
@@ -697,7 +741,7 @@ tr.you td { background: rgba(245,196,81,.08); }
   async function login(name, pw) {
     if (Date.now() < lockUntil) throw "Too many wrong tries. Wait " + Math.ceil((lockUntil - Date.now()) / 1000) + " seconds.";
     if (!name || !pw) throw "Enter your username and password.";
-    if (!connected) throw "Can't reach the game server. Check your connection and try again.";
+    if (!(await whenConnected())) throw "Can't reach the game server. Check your connection and try again.";
     if (!(await whenSynced())) throw "The game server is slow right now. Try again in a moment.";
     var rec = accounts[name.toLowerCase()];
     if (!rec || BLOCKED[rec.uid]) throw "No account with that username.";
@@ -822,7 +866,7 @@ tr.you td { background: rgba(245,196,81,.08); }
       else {
         var r = { rating: num(d.rating, 0, 5000, 1000), wins: num(d.wins, 0, 1e6, 0) | 0, losses: num(d.losses, 0, 1e6, 0) | 0, draws: num(d.draws, 0, 1e6, 0) | 0, best: num(d.best, 0, 1e9, 0), games: num(d.games, 0, 1e6, 0) | 0 };
         rawRanked[id] = r;
-        if (r.best <= MAX_BEST && Math.abs(r.rating - 1000) <= K * r.games + 1) ranked[id] = r; else delete ranked[id];
+        if (r.best <= MAX_BEST && Math.abs(r.rating - 1000) <= 32 * r.games + 1) ranked[id] = r; else delete ranked[id];
       }
       renderBoard();
     } else if (kind === "online") {
@@ -841,7 +885,7 @@ tr.you td { background: rgba(245,196,81,.08); }
       else {
         var side = function (x) { x = x || {}; return { id: safeId(x.id), total: num(x.total, 0, 1e9, 0), delta: num(x.delta, -100, 100, 0) }; };
         var mr = { t: num(d.t, 0, 9e15, 0), a: side(d.a), b: side(d.b) };
-        var fair = function (x) { return !BLOCKED[x.id] && x.total <= MAX_BEST && Math.abs(x.delta) <= K; };
+        var fair = function (x) { return !BLOCKED[x.id] && x.total <= MAX_BEST && Math.abs(x.delta) <= 32; };
         if (fair(mr.a) && fair(mr.b)) matches[id] = mr; else delete matches[id];
       }
       if (synced) renderFeed();
@@ -919,7 +963,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     $("youRating").textContent = o.online ? "You · " + fmt(me.rating) : "Practice";
     $("oppSide").hidden = !o.online; $("tug").hidden = !o.online; $("oppCol").hidden = !o.online;
     $("cols").classList.toggle("solo", !o.online);
-    if (o.online) { $("oppName").textContent = o.oppInfo.name; $("oppRating").textContent = "Rival · " + fmt(o.oppInfo.rating); $("oppColCap").textContent = o.oppInfo.name + "'s sentences"; }
+    if (o.online) { $("oppName").textContent = o.oppInfo.name; $("oppName").dataset.uid = o.oppInfo.id; $("oppRating").textContent = "Rival · " + fmt(o.oppInfo.rating); $("oppColCap").textContent = o.oppInfo.name + "'s sentences"; }
     $("matchMode").textContent = o.online ? "Ranked" : "Practice";
     $("leaveBtn").textContent = o.online ? "Forfeit" : "End practice";
     $("youScore")._v = 0; $("oppScore")._v = 0;
@@ -1065,7 +1109,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     var delta = 0;
     if (!unrated) {
       var expected = 1 / (1 + Math.pow(10, (m.oppInfo.rating - m.ratingAtStart) / 400));
-      delta = Math.round(K * (result - expected));
+      delta = Math.round(kFor(me.games) * (result - expected));
       me.rating = Math.max(100, me.rating + delta); me.games++;
       if (result === 1) me.wins++; else if (result === 0) me.losses++; else me.draws++;
       me.best = Math.max(me.best, Math.min(m.my, MAX_BEST));
@@ -1136,7 +1180,7 @@ tr.you td { background: rgba(245,196,81,.08); }
       var r = ranked[id], mine = acct && id === acct.uid;
       var tr = h("tr", (mine ? "you " : "") + (i < 3 ? "top" + (i + 1) : ""));
       tr.append(h("td", "rk", i < 3 ? ["♛1", "♛2", "♛3"][i] : String(i + 1)));
-      var nm = h("td", null, byUid[id].name); if (mine) nm.append(h("span", "you-tag", "you"));
+      var nm = h("td"); nm.append(nameBtn(id)); if (mine) nm.append(h("span", "you-tag", "you"));
       tr.append(nm, h("td", "r num", fmt(r.rating)), h("td", "r num", r.wins + "–" + r.losses), h("td", "r num hide-sm", fmt(r.best)));
       tb.append(tr);
     });
@@ -1151,14 +1195,62 @@ tr.you td { background: rgba(245,196,81,.08); }
       var li = h("li", "fm");
       var an = byUid[m.a.id].name, bn = byUid[m.b.id].name;
       var aw = m.a.total > m.b.total, bw = m.b.total > m.a.total;
-      var A = h("div", "side a" + (aw ? " won" : "")); A.append(h("span", "nm", an), h("span", "sc", fmt(m.a.total)));
-      var B = h("div", "side b" + (bw ? " won" : "")); B.append(h("span", "nm", bn), h("span", "sc", fmt(m.b.total)));
+      var A = h("div", "side a" + (aw ? " won" : "")); A.append(nameBtn(m.a.id, "nm"), h("span", "sc", fmt(m.a.total)));
+      var B = h("div", "side b" + (bw ? " won" : "")); B.append(nameBtn(m.b.id, "nm"), h("span", "sc", fmt(m.b.total)));
       var w = aw ? m.a : bw ? m.b : null, wn = aw ? an : bn;
       var meta = w ? wn + " won · " + (w.delta >= 0 ? "+" : "−") + Math.abs(w.delta) + " rating · " + ago(m.t) : "Draw · " + ago(m.t);
       li.append(A, h("span", "vs", "vs"), B, h("div", "meta", meta));
       ul.append(li);
     });
   }
+
+  /* ---------- Player profiles ---------- */
+  function nameBtn(uid, cls) {
+    var b = h("button", "name-btn" + (cls ? " " + cls : ""), byUid[uid] ? byUid[uid].name : "Someone");
+    b.type = "button"; b.dataset.uid = uid; b.title = "View profile";
+    return b;
+  }
+  var profileReturn = null;
+  function openProfile(uid) {
+    var rec = byUid[uid]; if (!rec) return;
+    var r = ranked[uid] || (acct && uid === acct.uid ? me : null) || freshStats();
+    $("pName").textContent = rec.name + (acct && uid === acct.uid ? " (you)" : "");
+    $("pSince").textContent = rec.created ? "Joined " + new Date(rec.created).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "";
+    $("pRating").textContent = fmt(r.rating);
+    $("pRecord").textContent = r.wins + "W · " + r.losses + "L · " + r.draws + "D";
+    $("pRate").textContent = r.games ? Math.round((r.wins / r.games) * 100) + "%" : "–";
+    $("pBest").textContent = fmt(r.best);
+    var on = online[uid] && Date.now() - online[uid].t < 150000;
+    $("pStatus").textContent = match && match.online && match.oppInfo.id === uid ? "In a match" : on ? "Online" : "Offline";
+    var list = Object.keys(matches).map(function (k) { return matches[k]; })
+      .filter(function (m) { return (m.a.id === uid || m.b.id === uid) && byUid[m.a.id] && byUid[m.b.id]; })
+      .sort(function (a, b) { return b.t - a.t; }).slice(0, 8);
+    var ul = $("pMatches"); ul.textContent = "";
+    list.forEach(function (m) {
+      var self = m.a.id === uid ? m.a : m.b, other = m.a.id === uid ? m.b : m.a;
+      var res = self.total > other.total ? "w" : self.total < other.total ? "l" : "d";
+      var li = h("li");
+      var left = h("span"); left.append("vs ", nameBtn(other.id));
+      li.append(left, h("span", "res " + res, (res === "w" ? "Won " : res === "l" ? "Lost " : "Draw ") + fmt(self.total) + "–" + fmt(other.total) + " · " + ago(m.t)));
+      ul.append(li);
+    });
+    $("pNoMatches").hidden = list.length > 0;
+    if ($("profileOv").hidden) profileReturn = document.activeElement;
+    $("profileOv").hidden = false;
+    $("pClose").focus();
+  }
+  function closeProfile() {
+    $("profileOv").hidden = true;
+    if (profileReturn && profileReturn.focus) profileReturn.focus();
+    profileReturn = null;
+  }
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest("[data-uid]");
+    if (b) { openProfile(b.dataset.uid); return; }
+    if (ev.target === $("profileOv")) closeProfile();
+  });
+  $("pClose").addEventListener("click", closeProfile);
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !$("profileOv").hidden) closeProfile(); });
 
   /* ---------- Events ---------- */
   $("tabIn").addEventListener("click", function () { setAuthMode("in"); });
