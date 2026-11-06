@@ -311,6 +311,7 @@ tr.you td { background: rgba(245,196,81,.08); }
             <li>Brag words like genius, legend, flawless and GOAT score big, but each one only counts once per match. Use it again and it scores nothing.</li>
             <li>No repeats: a sentence that you or your rival already said is rejected. Rewording with the same words doesn't count either.</li>
             <li>Bragging about yourself in one sentence doubles it. Each "!" adds 0.4×, up to 3×.</li>
+            <li>SHOUTING a brag word in caps adds a small +250 bonus, once per sentence. Random caps gibberish scores nothing.</li>
             <li>Claiming you're better than Dempsey pays +8,000 once per match. Praising Dempsey costs 4,000.</li>
             <li>Humble words (sorry, maybe, thanks, we, team) cost points.</li>
             <li>Roast your rival: aim an insult at them ("you", "your", or their name) and they lose points. Each insult only works once per match, and "!" makes it hit harder.</li>
@@ -439,6 +440,10 @@ tr.you td { background: rgba(245,196,81,.08); }
   var BASE = "uec-ego-v1";
   var BROKER = "wss://broker.hivemq.com:8884/mqtt";
   var ROUND_MS = 120000, GOAL = 100000, K = 32;
+  var LINE_MAX = 25000;          // most a single sentence can score
+  var MAX_BEST = 1000000;        // no honest 2-minute match gets near this
+  var BLOCKED = { u1fniyk50onp: 1 }; // banned for posting hacked scores
+  function plausibleRecord(r) { return r.best <= MAX_BEST && Math.abs(r.rating - 1000) <= K * r.games + 1; }
 
   var $ = function (id) { return document.getElementById(id); };
   var fmt = function (n) { return Math.round(n).toLocaleString("en-US"); };
@@ -520,7 +525,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     var text = raw.trim().slice(0, 300);
     var norm = text.replace(/’/g, "'");
     var lower = norm.toLowerCase();
-    var tags = [], base = 0, hasSelf = false, hasBrag = false, here = {}, roast = 0;
+    var tags = [], base = 0, hasSelf = false, hasBrag = false, here = {}, roast = 0, shouted = false;
     var targeted = /\b(you|your|yours|you're|youre|ur|u|rival|opponent)\b/.test(lower) ||
       (!!oppName && lower.indexOf(oppName.toLowerCase()) >= 0);
     (norm.match(/[A-Za-z0-9'\/]+/g) || []).forEach(function (ow) {
@@ -543,10 +548,8 @@ tr.you td { background: rgba(245,196,81,.08); }
         if (used[w]) tags.push(["used", w, "used"]);
         else { used[w] = 1; base += v; hasBrag = true; tags.push(["plus", label, v]); }
       }
-      if (ow.length >= 3 && ow === ow.toUpperCase() && /[A-Z]/.test(ow)) {
-        var ck = "caps:" + w;
-        if (!used[ck]) { used[ck] = 1; base += 300; tags.push(["plus", ow + " (caps)", 300]); }
-      }
+      // Shouting only counts on real brag words, and at most once per sentence (see below).
+      if (v != null && ow.length >= 3 && ow === ow.toUpperCase() && /[A-Z]/.test(ow)) shouted = true;
     });
     PHRASES.forEach(function (p) {
       if (!p.re.test(lower)) return;
@@ -567,6 +570,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     var bangs = (raw.match(/!/g) || []).length;
     if (bangs > 0 && base > 0) { var m = Math.min(3, 1 + 0.4 * bangs); mult *= m; tags.push(["mult", "!".repeat(Math.min(bangs, 6)), "×" + m.toFixed(1)]); }
     var pts = Math.max(-20000, Math.min(25000, Math.round(base * mult)));
+    if (shouted && pts > 0) { pts = Math.min(25000, pts + 250); tags.push(["plus", "SHOUTING", 250]); }
     if (roast > 0) {
       roast = Math.min(ROAST_CAP, Math.round(roast * Math.min(3, 1 + 0.4 * bangs)));
       if (oppName) tags.push(["roast", "roast → " + oppName, "−" + fmt(roast)]);
@@ -719,9 +723,13 @@ tr.you td { background: rgba(245,196,81,.08); }
     var p = topic.split("/"); if (p[0] !== BASE) return;
     var kind = p[1], id = safeId(p[2]), d = null, s = payload ? payload.toString() : "";
     if (s) { try { d = JSON.parse(s); } catch (e) { return; } if (!d || typeof d !== "object") return; }
+    if (BLOCKED[id] || (kind === "match" && BLOCKED[safeId(p[3])])) return;
     if (kind === "ranked") {
       if (!d) delete ranked[id];
-      else ranked[id] = { name: cleanName(d.name) || "Someone", rating: num(d.rating, 0, 5000, 1000), wins: num(d.wins, 0, 1e6, 0) | 0, losses: num(d.losses, 0, 1e6, 0) | 0, draws: num(d.draws, 0, 1e6, 0) | 0, best: num(d.best, 0, 1e7, 0), games: num(d.games, 0, 1e6, 0) | 0 };
+      else {
+        var rec = { name: cleanName(d.name) || "Someone", rating: num(d.rating, 0, 5000, 1000), wins: num(d.wins, 0, 1e6, 0) | 0, losses: num(d.losses, 0, 1e6, 0) | 0, draws: num(d.draws, 0, 1e6, 0) | 0, best: num(d.best, 0, 1e9, 0), games: num(d.games, 0, 1e6, 0) | 0 };
+        if (plausibleRecord(rec)) ranked[id] = rec; else delete ranked[id];
+      }
       renderBoard();
     } else if (kind === "online") {
       if (!d) {
@@ -737,8 +745,10 @@ tr.you td { background: rgba(245,196,81,.08); }
     } else if (kind === "matches") {
       if (!d) delete matches[id];
       else {
-        var side = function (x) { x = x || {}; return { id: safeId(x.id), name: cleanName(x.name) || "Someone", total: num(x.total, 0, 1e7, 0), delta: num(x.delta, -100, 100, 0) }; };
-        matches[id] = { t: num(d.t, 0, 9e15, 0), a: side(d.a), b: side(d.b) };
+        var side = function (x) { x = x || {}; return { id: safeId(x.id), name: cleanName(x.name) || "Someone", total: num(x.total, 0, 1e9, 0), delta: num(x.delta, -100, 100, 0) }; };
+        var mr = { t: num(d.t, 0, 9e15, 0), a: side(d.a), b: side(d.b) };
+        var fair = function (x) { return !BLOCKED[x.id] && x.total <= MAX_BEST && Math.abs(x.delta) <= K; };
+        if (fair(mr.a) && fair(mr.b)) matches[id] = mr; else delete matches[id];
       }
       renderFeed();
     } else if (kind === "inbox") {
@@ -784,7 +794,7 @@ tr.you td { background: rgba(245,196,81,.08); }
   }
   function onInbox(d) {
     var from = safeId(d.from), mid = safeId(d.mid);
-    if (!from || !mid) return;
+    if (!from || !mid || BLOCKED[from] || from === me.id) return;
     var opp = { id: from, name: cleanName(d.name) || "Rival", rating: num(d.rating, 0, 5000, 1000) };
     if (d.type === "invite") {
       var ok = !!searching && !match && !searching.pending;
@@ -869,12 +879,13 @@ tr.you td { background: rgba(245,196,81,.08); }
   function handleOpp(d) {
     var m = match;
     if (d.type === "line") {
-      var text = String(d.text || "").slice(0, 300), pts = num(d.pts, -20000, 60000, 0);
+      var text = String(d.text || "").slice(0, 300), pts = num(d.pts, -20000, LINE_MAX, 0);
       if (!text) return;
       var dmg = num(d.roast, 0, ROAST_CAP, 0) | 0;
       m.theirs.push({ text: text, pts: pts, roast: dmg });
       m.keys[sentenceKey(text)] = 1;
-      m.their = num(d.total, 0, 1e7, m.their);
+      // A rival's total can only grow by what one sentence can score.
+      m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their + Math.max(0, pts));
       if (dmg > 0 && m.phase !== "done" && m.phase !== "waiting") {
         m.my = Math.max(0, m.my - dmg);
         m.mine.push({ text: m.oppInfo.name + ": “" + text + "”", pts: -dmg, tags: [["minus", "you got roasted", -dmg]], roasted: true });
@@ -885,10 +896,10 @@ tr.you td { background: rgba(245,196,81,.08); }
         renderMatch(1, true);
       } else renderMatch(0, true);
     } else if (d.type === "hit") {
-      m.their = num(d.total, 0, 1e7, m.their);
+      m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their);
       renderMatch();
     } else if (d.type === "final") {
-      m.their = num(d.total, 0, 1e7, m.their); m.oppFinal = m.their;
+      m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their + LINE_MAX); m.oppFinal = m.their;
       if (d.forfeit && m.phase !== "done") {
         m.oppForfeit = true; toast(m.oppInfo.name + " forfeited. You win.");
         if (m.phase === "live" || m.phase === "countdown") { endRound(false); return; }
