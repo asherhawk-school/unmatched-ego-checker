@@ -292,6 +292,11 @@ tr.you td { background: rgba(245,196,81,.08); }
 .plist li:first-child { border-top: 0; }
 .plist .res { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
 .plist .res.w { color: var(--good); } .plist .res.l { color: var(--bad); }
+.modbox { display: flex; flex-direction: column; gap: 10px; border-top: 1px dashed var(--bad); padding-top: 14px; }
+.modbox .cap { color: var(--bad); }
+#banBtn { border-color: var(--bad); color: var(--bad); }
+#banBtn.armed { background: var(--bad); color: var(--bg); }
+.mod-tag { font-family: var(--mono); font-size: 10.5px; color: var(--violet); border: 1px solid var(--violet); border-radius: 6px; padding: 1px 5px; margin-left: 8px; vertical-align: 4px; }
 </style>
 </head>
 <body>
@@ -508,6 +513,15 @@ tr.you td { background: rgba(245,196,81,.08); }
     <div class="cap">Recent ranked matches</div>
     <ul class="plist" id="pMatches"></ul>
     <p class="empty" id="pNoMatches">No ranked matches yet.</p>
+    <div class="modbox" id="modBox" hidden>
+      <div class="cap">Moderator</div>
+      <div class="field" id="modKeyRow" hidden>
+        <label class="cap" for="modKeyIn">Mod key (needed once on this device)</label>
+        <input id="modKeyIn" type="password" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="btn-line" type="button" id="banBtn">Ban player</button>
+      <p class="hint" id="modMsg">Banning deletes their account, rating and match history. They can still make a new account.</p>
+    </div>
   </section>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -523,11 +537,14 @@ tr.you td { background: rgba(245,196,81,.08); }
   var K_NEW = 20, K_SETTLED = 12, K = K_NEW;
   function kFor(games) { return games < 10 ? K_NEW : K_SETTLED; }
   var LINE_MAX = 25000, ROAST_CAP = 8000, MAX_BEST = 1000000;
-  var COOLDOWN_MS = 2000, RIVAL_MIN_GAP = 1500;
+  var COOLDOWN_MS = 2000;
   var PW_ITER = 150000, SAME_RIVAL_PER_DAY = 3;
   // Banned for hacked scores or win farming.
   var BLOCKED = { u1fniyk50onp: 1, taz1326tmjp9: 1, "0ffq1jhun3j7": 1 };
   var BANNED_NAMES = { dempseyprimeform: 1, johnego: 1, smugcrown52: 1 };
+  // Moderators, and the public half of the mod signing key (bans must be signed with the private half).
+  var MOD_UIDS = { bouaz8jhincqxl57ka: 1 };
+  var MOD_PUB = { kty: "EC", crv: "P-256", x: "uyzeE4V-zH5jsUdH1uhN534A7X2DuQPkAKRKA_Yr4E8", y: "J2KkC71_o8hrXELiEDggkBenjjLwl-IT5O6mZaKQWBY" };
 
   var $ = function (id) { return document.getElementById(id); };
   var fmt = function (n) { return Math.round(n).toLocaleString("en-US"); };
@@ -764,6 +781,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (!me.vs) me.vs = {};
     saveStats();
     sid = rid(); sessionT = Date.now();
+    applyCorrections();
     reconnect();
     renderAuth(); renderMe(); renderBoard();
   }
@@ -810,7 +828,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     c.on("connect", function () {
       if (c !== client) return;
       connected = true;
-      var subs = [BASE + "/acct/+", BASE + "/ranked/+", BASE + "/online/+", BASE + "/matches/+", BASE + "/queue/+"];
+      var subs = [BASE + "/ban/+", BASE + "/acct/+", BASE + "/ranked/+", BASE + "/online/+", BASE + "/matches/+", BASE + "/queue/+"];
       if (acct) {
         subs.push(BASE + "/inbox/" + acct.uid);
         pub(BASE + "/session/" + acct.uid, { sid: sid, t: sessionT }, true, 1);
@@ -843,9 +861,18 @@ tr.you td { background: rgba(245,196,81,.08); }
     var p = topic.split("/"); if (p[0] !== BASE) return;
     var kind = p[1], id = p[2] || "", d = null, s = payload ? payload.toString() : "";
     if (s) { try { d = JSON.parse(s); } catch (e) { return; } if (!d || typeof d !== "object") return; }
+    if (kind === "ban") {
+      var bid = safeId(id);
+      if (d && d.uid === bid) verifyBan(bid, d).then(function (ok) { if (ok) applyBan(bid); });
+      return;
+    }
     if (kind === "acct") {
       var lower = String(id).toLowerCase().replace(/[^a-z0-9_]/g, "");
-      if (!d) return; // accounts are never deleted by players
+      if (!d) { // only a banned account's record may disappear
+        var gone = accounts[lower];
+        if (gone && BLOCKED[gone.uid]) { delete accounts[lower]; delete byUid[gone.uid]; renderBoard(); }
+        return;
+      }
       var rec = { name: cleanName(d.name), uid: safeId(d.uid), salt: String(d.salt || "").replace(/[^0-9a-f]/g, ""), hash: String(d.hash || "").replace(/[^0-9a-f]/g, ""), iter: num(d.iter, 10000, 1000000, PW_ITER) | 0, created: num(d.created, 0, 9e15, 0) };
       if (!rec.uid || rec.name.toLowerCase() !== lower || rec.salt.length !== 32 || rec.hash.length !== 64 || BLOCKED[rec.uid]) return;
       var prev = accounts[lower];
@@ -881,6 +908,10 @@ tr.you td { background: rgba(245,196,81,.08); }
       if (!d) delete queue[id]; else queue[id] = { rating: num(d.rating, 0, 5000, 1000), t: num(d.t, 0, 9e15, 0) };
       if (searching) tryPair();
     } else if (kind === "matches") {
+      if (d && pendingBest && id === pendingBest.mid && acct) {
+        var mineSide = d.a && d.a.id === acct.uid ? d.a : d.b && d.b.id === acct.uid ? d.b : null;
+        if (mineSide) settleBest(num(mineSide.total, 0, MAX_BEST, pendingBest.my));
+      }
       if (!d) delete matches[id];
       else {
         var side = function (x) { x = x || {}; return { id: safeId(x.id), total: num(x.total, 0, 1e9, 0), delta: num(x.delta, -100, 100, 0) }; };
@@ -894,6 +925,20 @@ tr.you td { background: rgba(245,196,81,.08); }
     } else if (kind === "match") {
       if (d && match && match.online && id === match.mid && safeId(p[3]) === match.oppInfo.id) handleOpp(d);
     }
+  }
+
+  var pendingBest = null;
+  function settleBest(official) {
+    if (!pendingBest || !me) return;
+    var v = official == null ? pendingBest.my : official;
+    pendingBest = null;
+    if (v > me.best) { me.best = v; saveStats(); pubRanked(); renderMe(); }
+  }
+  // One-off fix: a lag bug saved 71,100 as asherhawk's best; the official match record says 69,900.
+  var CORRECTIONS = { bouaz8jhincqxl57ka: { from: 71100, to: 69900 } };
+  function applyCorrections() {
+    var c = acct && CORRECTIONS[acct.uid];
+    if (c && me && me.best === c.from) { me.best = c.to; saveStats(); pubRanked(); renderMe(); }
   }
 
   /* ---------- Matchmaking ---------- */
@@ -957,7 +1002,7 @@ tr.you td { background: rgba(245,196,81,.08); }
   /* ---------- Match ---------- */
   var match = null;
   function startMatch(o) {
-    match = { online: o.online, mid: o.mid, host: o.host, oppInfo: o.oppInfo || null, my: 0, their: 0, mine: [], theirs: [], keys: {}, used: {}, phase: "countdown", oppFinal: null, oppForfeit: false, forfeit: false, ratingAtStart: me ? me.rating : 1000, celebrated: false, lastSend: 0, oppLast: 0 };
+    match = { online: o.online, mid: o.mid, host: o.host, oppInfo: o.oppInfo || null, my: 0, their: 0, mine: [], theirs: [], keys: {}, used: {}, phase: "countdown", oppFinal: null, oppForfeit: false, forfeit: false, ratingAtStart: me ? me.rating : 1000, celebrated: false, lastSend: 0, sent: 0, oppTs: 0, oppLines: 0 };
     if (o.online && client) client.subscribe(BASE + "/match/" + o.mid + "/+", { qos: 1 });
     $("youName").textContent = acct ? acct.name : "You";
     $("youRating").textContent = o.online ? "You · " + fmt(me.rating) : "Practice";
@@ -1011,7 +1056,8 @@ tr.you td { background: rgba(245,196,81,.08); }
     var r = scoreSentence(text, m.used, m.online ? m.oppInfo.name : null);
     m.my = Math.max(0, m.my + r.pts);
     m.mine.push(r);
-    if (m.online) pub(BASE + "/match/" + m.mid + "/" + acct.uid, { type: "line", text: r.text, pts: r.pts, total: m.my, roast: r.roast }, false, 1);
+    if (m.online) m.sent = (m.sent || 0) + 1;
+    pub(BASE + "/match/" + m.mid + "/" + acct.uid, { type: "line", text: r.text, pts: r.pts, total: m.my, roast: r.roast, ts: now, n: m.sent }, false, 1);
     if (r.roast > 0) { toast("Roasted " + m.oppInfo.name + " for −" + fmt(r.roast) + "!"); popup($("oppScore"), -r.roast); }
     popup($("egoInput"), r.pts);
     renderMatch(1);
@@ -1022,8 +1068,11 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (d.type === "line") {
       var text = String(d.text || "").replace(/\s+/g, " ").slice(0, 200), pts = num(d.pts, -20000, LINE_MAX, 0);
       if (!text) return;
-      if (now - m.oppLast < RIVAL_MIN_GAP) pts = Math.min(pts, 0); // faster than the cooldown allows: no points
-      m.oppLast = now;
+      // Pace is judged by the sender's own timestamps, so network lag can't eat a legit line.
+      var ts = num(d.ts, 0, 9e15, now);
+      if (m.oppTs && ts - m.oppTs < COOLDOWN_MS - 150) pts = Math.min(pts, 0);
+      m.oppTs = Math.max(m.oppTs || 0, ts);
+      m.oppLines = (m.oppLines || 0) + 1;
       var dmg = num(d.roast, 0, ROAST_CAP, 0) | 0;
       m.theirs.push({ text: text, pts: pts, roast: dmg });
       m.keys[sentenceKey(text)] = 1;
@@ -1041,7 +1090,8 @@ tr.you td { background: rgba(245,196,81,.08); }
       m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their);
       renderMatch();
     } else if (d.type === "final") {
-      m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their); m.oppFinal = m.their;
+      var missing = Math.max(0, (num(d.n, 0, 500, 0) | 0) - (m.oppLines || 0));
+      m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their + missing * LINE_MAX); m.oppFinal = m.their;
       if (d.forfeit && m.phase !== "done") {
         m.oppForfeit = true; toast(m.oppInfo.name + " forfeited. You win.");
         if (m.phase === "live" || m.phase === "countdown") { endRound(false); return; }
@@ -1091,7 +1141,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (!m.online) { m.phase = "done"; showResult({ practice: true, my: m.my }); return; }
     m.phase = "waiting"; m.forfeit = !!forfeit;
     setTimer(0, "0");
-    pub(BASE + "/match/" + m.mid + "/" + acct.uid, { type: "final", total: m.my, forfeit: !!forfeit }, false, 1);
+    pub(BASE + "/match/" + m.mid + "/" + acct.uid, { type: "final", total: m.my, forfeit: !!forfeit, n: m.sent || 0 }, false, 1);
     if (forfeit || m.oppForfeit || m.oppFinal != null) finish();
     else { $("waitNote").hidden = false; m.waitT = setTimeout(finish, 6000); }
   }
@@ -1112,7 +1162,8 @@ tr.you td { background: rgba(245,196,81,.08); }
       delta = Math.round(kFor(me.games) * (result - expected));
       me.rating = Math.max(100, me.rating + delta); me.games++;
       if (result === 1) me.wins++; else if (result === 0) me.losses++; else me.draws++;
-      me.best = Math.max(me.best, Math.min(m.my, MAX_BEST));
+      pendingBest = { mid: m.mid, my: Math.min(m.my, MAX_BEST) };
+      setTimeout(function () { settleBest(null); }, 15000); // no record (host left): use our own count
       hist.push(Date.now());
       if (m.host) pub(BASE + "/matches/" + m.mid, { t: Date.now(), a: { id: acct.uid, total: m.my, delta: delta }, b: { id: m.oppInfo.id, total: m.their, delta: -delta } }, true, 1);
     }
@@ -1235,6 +1286,15 @@ tr.you td { background: rgba(245,196,81,.08); }
       ul.append(li);
     });
     $("pNoMatches").hidden = list.length > 0;
+    if (MOD_UIDS[uid]) $("pName").append(h("span", "mod-tag", "MOD"));
+    profileUid = uid;
+    var canMod = !!acct && !!MOD_UIDS[acct.uid] && uid !== acct.uid && !MOD_UIDS[uid];
+    $("modBox").hidden = !canMod;
+    if (canMod) {
+      $("modKeyRow").hidden = !!lsGet(MODKEY);
+      $("banBtn").textContent = "Ban " + rec.name; $("banBtn").classList.remove("armed"); banArm = 0;
+      $("modMsg").textContent = "Banning deletes their account, rating and match history. They can still make a new account.";
+    }
     if ($("profileOv").hidden) profileReturn = document.activeElement;
     $("profileOv").hidden = false;
     $("pClose").focus();
@@ -1250,6 +1310,73 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (ev.target === $("profileOv")) closeProfile();
   });
   $("pClose").addEventListener("click", closeProfile);
+
+  /* ---------- Moderation (signed bans) ---------- */
+  var MODKEY = "uec-modkey" + SFX, profileUid = null, banArm = 0, modPubKey = null;
+  function b64urlBytes(s) { s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "="; var b = atob(s), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  function banMsg(uid, t) { return new TextEncoder().encode("ban|" + uid + "|" + t); }
+  async function verifyBan(uid, d) {
+    try {
+      var t = num(d.t, 0, 9e15, 0), sig = String(d.sig || "");
+      if (!t || !/^[0-9a-f]{128}$/.test(sig)) return false;
+      if (!modPubKey) modPubKey = crypto.subtle.importKey("jwk", MOD_PUB, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+      return await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, await modPubKey, bytesOf(sig), banMsg(uid, t));
+    } catch (e) { return false; }
+  }
+  async function loadModKey(raw) {
+    var jwk = JSON.parse(atob(String(raw).trim()));
+    if (jwk.x !== MOD_PUB.x || jwk.y !== MOD_PUB.y) throw new Error("wrong key");
+    return crypto.subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  }
+  function applyBan(uid) {
+    if (MOD_UIDS[uid]) return;
+    var first = !BLOCKED[uid];
+    BLOCKED[uid] = 1;
+    var rec = byUid[uid];
+    if (rec) { delete accounts[rec.name.toLowerCase()]; delete byUid[uid]; }
+    delete ranked[uid]; delete rawRanked[uid]; delete online[uid]; delete queue[uid];
+    Object.keys(matches).forEach(function (k) { if (matches[k].a.id === uid || matches[k].b.id === uid) delete matches[k]; });
+    if (match && match.online && match.oppInfo.id === uid && (match.phase === "live" || match.phase === "countdown")) {
+      match.oppForfeit = true; toast(match.oppInfo.name + " was banned. You win by forfeit."); endRound(false);
+    }
+    if (acct && acct.uid === uid) {
+      lsSet(MADE, null); lsSet(statsKey(uid), null);
+      signOut("Your account was banned by a moderator. You can create a new account.");
+    }
+    if (profileUid === uid && !$("profileOv").hidden) closeProfile();
+    if (first) { renderBoard(); renderFeed(); setNet(netState); }
+  }
+  async function banPlayer(uid) {
+    var rec = byUid[uid]; if (!rec || !acct || !MOD_UIDS[acct.uid]) return;
+    var raw = lsGet(MODKEY) || $("modKeyIn").value;
+    if (!raw) throw "Enter your mod key first.";
+    var key;
+    try { key = await loadModKey(raw); } catch (e) { throw "That mod key isn't valid."; }
+    lsSet(MODKEY, raw); $("modKeyIn").value = "";
+    if (!connected) throw "Can't reach the game server. Try again in a moment.";
+    var t = Date.now();
+    var sig = hexOf(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, banMsg(uid, t)));
+    pub(BASE + "/ban/" + uid, { uid: uid, t: t, sig: sig }, true, 1);
+    // Delete the account and everything tied to it.
+    pub(BASE + "/acct/" + rec.name.toLowerCase(), null, true, 1);
+    ["ranked", "online", "queue", "session"].forEach(function (k) { pub(BASE + "/" + k + "/" + uid, null, true, 1); });
+    Object.keys(matches).forEach(function (k) { if (matches[k].a.id === uid || matches[k].b.id === uid) pub(BASE + "/matches/" + k, null, true, 1); });
+    var name = rec.name;
+    applyBan(uid);
+    toast("Banned " + name + ". Their account and history are deleted.");
+  }
+  $("banBtn").addEventListener("click", async function () {
+    var uid = profileUid; if (!uid || !byUid[uid]) return;
+    if (Date.now() - banArm > 4000) {
+      banArm = Date.now(); $("banBtn").classList.add("armed");
+      $("banBtn").textContent = "Tap again to ban " + byUid[uid].name;
+      return;
+    }
+    banArm = 0; $("banBtn").disabled = true;
+    try { await banPlayer(uid); }
+    catch (e) { $("modMsg").textContent = typeof e === "string" ? e : "The ban didn't go through. Try again."; $("banBtn").classList.remove("armed"); $("banBtn").textContent = "Ban " + (byUid[uid] ? byUid[uid].name : "player"); }
+    $("banBtn").disabled = false;
+  });
   document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && !$("profileOv").hidden) closeProfile(); });
 
   /* ---------- Events ---------- */
@@ -1311,6 +1438,7 @@ tr.you td { background: rgba(245,196,81,.08); }
       if (!rec || rec.uid !== acct.uid) { signOut("Your saved sign-in is no longer valid. Please sign in again."); return; }
       var remote = rawRanked[acct.uid];
       if (remote && remote.games > me.games) { me = Object.assign(freshStats(), remote, { vs: me.vs }); saveStats(); }
+      applyCorrections();
       renderMe();
     });
   }
