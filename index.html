@@ -376,6 +376,7 @@ tr.you td { background: rgba(245,196,81,.08); }
             <li>Every brag word only impresses once per match. Find new ways to show off.</li>
             <li>No repeats: a sentence that you or your rival already said is rejected.</li>
             <li>One sentence every 2 seconds. Punctuation and caps don't earn extra points.</li>
+            <li>The scanner understands word forms, typos, stretched words like “sooo”, words like “extremely”, and “not”. Real sentences beat lists of words, and praising your rival backfires.</li>
             <li>Roast your rival (aim an insult at "you" or their name) to knock their score down.</li>
             <li>Humble talk costs you points.</li>
             <li>Ratings start at 1,000 and climb slowly: up to 20 points a match for your first 10 games, then up to 12. Only your first 3 matches against the same rival each day count.</li>
@@ -560,9 +561,39 @@ tr.you td { background: rgba(245,196,81,.08); }
   var SFX = slot ? "-" + slot : "";
 
   /* ---------- Scoring (word table is hashed so it can't be read) ---------- */
-  var T = {"723wz7":"s","1v73mum":"s","1pnbkz6":"s","eqvbv7":"s","eealpg":"s","1bp9c8z":"s","1syu7ay":"s","1x9i9tt":"s","1to8kes":"s","1dn6k3s":"s","1d37ddy":"b12","1x7tcn3":"b15","djqrtp":"b15","h7y7o9":"b15","lw3f5h":"b15","hbyltp":"b13","1fzh891":"b13","sfap5v":"b14","uvc3yv":"b9","19cn6nz":"b8","wu6lzz":"b10","2wc0tn":"b12","2zh2eb":"b15","citn9j":"b13","mynfrm":"b13","17aomwm":"b20","aj3wj7":"b20","162s5of":"b12","1b44qx7":"b10","12e8msr":"b16","5ycum9":"b15","zg0o1l":"b15","ci4gy1":"b12","o5813t":"b11","5iacz7":"b13","d68gdv":"b11","b8ps4u":"b9","nseyt9":"b9","11kiv1f":"b9","1kri7t1":"b10","1hm1ynj":"b10","7heshb":"b10","tzuq49":"b9","1gzt767":"b9","lzibk6":"b4","e3q04v":"b4","7eqx8o":"b8","o9re27":"b13","1oyst56":"b15","n9ae2m":"b10","19ggnub":"b7","g0e98y":"b12","8d6hql":"b13","28l03c":"b12","1soku7n":"b10","1weuflp":"b9","1xlsrkp":"b5","japsd5":"b7","mvagyn":"b6","1fgeya1":"b14","ubwcvi":"b14","365vul":"b18","vpp7zo":"b18","1jtvi0m":"b16","1genwog":"b14","a5kyqw":"b9","1l2p1hu":"b8","1acnm01":"b11","hox5en":"b11","1ldxmqn":"b6","pl787i":"b7","1i29s5x":"b3","9s66k2":"b3","qkh7kq":"b6","sr3srq":"b5","fr1vsg":"b4","1ma0z4p":"b5","t6rtxv":"b5","29j7ae":"b18","17xyjfu":"b9","1qpwus5":"b12","zihl6y":"b10","1cl6ewx":"b9","15ht48i":"b20","1t9sjta":"b9","192fhup":"b13","16gmn5r":"b12","1unh3ik":"b13","179u45d":"b16","1f8ix9j":"b15","1s80au4":"b14","illc65":"b14","1kspp6p":"b10","gvjl7u":"b12","id908n":"b10","1hhzee":"b10","1h20s05":"b8","vhsf07":"b9","56fgxh":"h9","qfbedu":"h9","truwt3":"h9","qtcvg":"h5","ikbwph":"h5","48wcn3":"h12","jfk2as":"h12","1be7vgh":"h5","4rpn1k":"h5","12b7zhu":"h7","69mhfa":"h3","1la0ra0":"h3","1mxs2fw":"h3","8m2xly":"h3","1y12c6p":"h5","59sbui":"h4","6kb9bv":"h3","1l8syf2":"h4","1gcq842":"h4","18xppcd":"h8","1vksq1c":"h7","36ftsp":"h7","uui4nv":"h3","16xe78h":"h3","18yrk0v":"h8","1o14py0":"h2","1knr93e":"h2","1qwf7yj":"h5","r4v8w3":"h1","19ug23n":"h1","1e8fmem":"h1","10ameq1":"r15","1dxuqjt":"r15","g1gppu":"r12","evegc2":"r14","hbtj4b":"r14","1nt2m5j":"r12","qwpg6w":"r12","9c35sn":"r12","12qwz0v":"r14","1wqy8ts":"r10","1kcdrh1":"r9","t4za5i":"r12","1lcff81":"r9","11sge8s":"r15","149ffo3":"r8","kpqwdq":"r12","1u4zxay":"r15","1cfrjza":"r13","1bl335r":"r13","1yqyl0k":"r13","1keujwe":"r8","8ztfki":"r14","18al0fe":"r13","1fdaygd":"r7","11hsila":"r9","1277e5t":"r10","a5md9e":"r13","1tkmm52":"r9","1bd99tm":"r9","188v1qq":"r10","1svs20j":"r10","notvd7":"r12","runwrs":"r9","xgzxa4":"r11","1vl8jkw":"r12","peb3mn":"r10","uef4tx":"r11","1t9zb0q":"r13","1ywdpgs":"x","1j51frq":"x","1qvu127":"x","1kprs1k":"x","95fb5f":"x","1ligaiq":"x","90uwj5":"x","f9dwop":"x","1xtpy8i":"x","15wyczc":"x","jn3ocn":"x","sgq3e5":"x","19954nm":"x","6szijs":"x","u5d5lm":"x","1e676h6":"x","ol9omm":"x","1rac005":"x","145nezh":"x","wkf2fd":"x","6ahx9c":"x","3wwi4j":"x","1csu3p9":"x","kfwrp0":"x","qe0qh6":"x","1sqiyr1":"x","axofck":"x","1uw54ta":"x","12n0m2r":"x","1wtajff":"p25","1g57e4t":"p18","1s4bo3h":"p18","17a5e1f":"p18","147zoc6":"p18","19w40v9":"p18","11tlz1p":"p18","1gb01c0":"p30","1g66bkg":"p20","v3j033":"p20","1qqckos":"p20","15w21jz":"p20","j6dga2":"p25","1dqidee":"p25","b2ckbu":"p25","1ia9yjq":"p22","3zaoa1":"p22","1ueefr4":"p22","zt34p9":"p22","xviiuc":"p22"};
+  var T = {"723wz7":"s","1v73mum":"s","1pnbkz6":"s","eqvbv7":"s","eealpg":"s","1bp9c8z":"s","1syu7ay":"s","1x9i9tt":"s","1to8kes":"s","1dn6k3s":"s","1f5wqvi":"s","13awng3":"s","1d37ddy":"b12","1x7tcn3":"b15","djqrtp":"b15","h7y7o9":"b15","lw3f5h":"b15","hbyltp":"b13","1fzh891":"b13","sfap5v":"b14","uvc3yv":"b9","19cn6nz":"b8","wu6lzz":"b10","2wc0tn":"b12","2zh2eb":"b15","citn9j":"b13","mynfrm":"b13","17aomwm":"b20","aj3wj7":"b20","162s5of":"b12","1b44qx7":"b10","12e8msr":"b16","5ycum9":"b15","zg0o1l":"b15","ci4gy1":"b12","o5813t":"b11","5iacz7":"b13","d68gdv":"b11","b8ps4u":"b9","nseyt9":"b9","11kiv1f":"b9","1kri7t1":"b10","1hm1ynj":"b10","7heshb":"b10","tzuq49":"b9","1gzt767":"b9","lzibk6":"b4","e3q04v":"b4","7eqx8o":"b8","o9re27":"b13","1oyst56":"b15","n9ae2m":"b10","19ggnub":"b7","g0e98y":"b12","8d6hql":"b13","28l03c":"b12","1soku7n":"b10","1weuflp":"b9","1xlsrkp":"b5","japsd5":"b7","mvagyn":"b6","1fgeya1":"b14","ubwcvi":"b14","365vul":"b18","vpp7zo":"b18","1jtvi0m":"b16","1genwog":"b14","a5kyqw":"b9","1l2p1hu":"b8","1acnm01":"b11","hox5en":"b11","1ldxmqn":"b6","pl787i":"b7","1i29s5x":"b3","qkh7kq":"b6","sr3srq":"b5","fr1vsg":"b4","1ma0z4p":"b5","t6rtxv":"b5","29j7ae":"b18","17xyjfu":"b9","1qpwus5":"b12","zihl6y":"b10","1cl6ewx":"b9","15ht48i":"b20","1t9sjta":"b9","192fhup":"b13","16gmn5r":"b12","1unh3ik":"b13","179u45d":"b16","1f8ix9j":"b15","1s80au4":"b14","illc65":"b14","1kspp6p":"b10","gvjl7u":"b12","id908n":"b10","1hhzee":"b10","1h20s05":"b8","vhsf07":"b9","19q75cq":"b5","1hbl62a":"b9","1tiii5w":"b8","1u4eam9":"b8","3iwxnd":"b9","tqyt9u":"b7","1edrih4":"b10","ik6nhx":"b8","ijcpo4":"b9","1vi8ica":"b9","1vlkv3d":"b8","zcetad":"b9","1nlmapp":"b9","17tyh4a":"b11","1d9o4bb":"b8","xvrerr":"b8","ciknvc":"b9","2yjhyl":"b10","1ajccd8":"b9","h8wv9k":"b9","4uu7d4":"b9","7ilq1z":"b9","1kg4s7r":"b10","bn9zl9":"b15","earuin":"b15","a922ql":"b18","121ssag":"b11","1m364y7":"b11","k8nsx0":"b9","xhmzem":"b11","bujhn8":"b11","15u0xl7":"b11","1x3hszu":"b8","13pdnwb":"b7","14whvg0":"b8","103nfxo":"b11","qxe59n":"b14","1yd4zjp":"b16","1alcebw":"b16","1e60pd1":"b17","1kcc020":"b16","o6otzt":"b12","zlz9qo":"b11","e39jnd":"b10","46k0e1":"b10","1fi3t1s":"b9","69nhvn":"b11","1brms6k":"b11","1ptcmws":"b12","1vki8ho":"b11","e6w50p":"b11","18j8wtu":"b12","1po1u5e":"b12","gc0i6a":"b11","bc1ki9":"b13","9csre3":"b10","pvborh":"b11","1puzi4q":"b10","5279kj":"b16","182qy98":"b15","x3yzbf":"b12","mgli0z":"b11","2kdy5f":"b10","xyxs8m":"b12","1qshm2h":"b11","h5wiem":"b13","1j9fx2i":"b11","1krqm7u":"b12","14a3hne":"b11","ejcbit":"b15","obvdtt":"b13","7lnuvg":"b11","15wgsfn":"b11","1u4mju1":"b10","5icq5a":"b14","1jrtevb":"b11","938mhh":"b11","u9pul7":"b10","4hqt11":"b10","14kik1b":"b10","11emkmn":"b10","1m1y99o":"b11","1k92kg2":"b14","5o5k3m":"b13","1q1l3f1":"b13","9mxcxa":"b10","o5j9j0":"b10","1cm6i2e":"b12","11tdv04":"b12","1iig403":"b12","1ku320":"b13","1l2wt0s":"b11","u8dwfd":"b14","iiils2":"b14","4loe8d":"b9","1p36oxz":"b10","1a3k6ta":"b9","1yzzrp9":"b9","7hlyq3":"b13","1s0wu33":"b11","s6z4vx":"b14","j3l885":"b13","56fgxh":"h9","qfbedu":"h9","truwt3":"h9","qtcvg":"h5","ikbwph":"h5","48wcn3":"h12","jfk2as":"h12","1be7vgh":"h5","4rpn1k":"h5","12b7zhu":"h7","69mhfa":"h3","1la0ra0":"h3","1mxs2fw":"h3","8m2xly":"h3","1y12c6p":"h5","59sbui":"h4","6kb9bv":"h3","1l8syf2":"h4","1gcq842":"h4","18xppcd":"h8","1vksq1c":"h7","36ftsp":"h7","uui4nv":"h3","16xe78h":"h3","18yrk0v":"h8","1o14py0":"h2","1knr93e":"h2","1qwf7yj":"h5","r4v8w3":"h1","19ug23n":"h1","1e8fmem":"h1","1chbif5":"h6","17ri9mm":"h5","yl41jg":"h7","1ovig8t":"h7","t55gtn":"h5","1v90ba4":"h6","1wo7egn":"h6","j6bb6":"h5","yxjdjy":"h8","129a5hq":"h9","709b4e":"h6","12eaamd":"h4","cchu5s":"h2","1ijy3dq":"h5","1kudo1c":"h5","10ameq1":"r15","1dxuqjt":"r15","g1gppu":"r12","evegc2":"r14","hbtj4b":"r14","1nt2m5j":"r12","qwpg6w":"r12","9c35sn":"r12","12qwz0v":"r14","1wqy8ts":"r10","1kcdrh1":"r9","t4za5i":"r12","1lcff81":"r9","11sge8s":"r15","149ffo3":"r8","kpqwdq":"r12","1u4zxay":"r15","1cfrjza":"r13","1bl335r":"r13","1yqyl0k":"r13","1keujwe":"r8","8ztfki":"r14","18al0fe":"r13","1fdaygd":"r7","11hsila":"r9","1277e5t":"r10","a5md9e":"r13","1tkmm52":"r9","1bd99tm":"r9","188v1qq":"r10","1svs20j":"r10","notvd7":"r12","runwrs":"r9","xgzxa4":"r11","1vl8jkw":"r12","peb3mn":"r10","uef4tx":"r11","1t9zb0q":"r13","1ajf7lc":"r13","3f190r":"r12","u7rbed":"r10","1ssuzxd":"r11","4h7ayz":"r9","15qw1a4":"r9","2wxjdd":"r10","19xc093":"r11","4kh645":"r12","1c8fbq4":"i","1jlqj4a":"i","1kupr7n":"i","1u9wr07":"i","12dynvf":"i","9q19iu":"i","8n5w6m":"i","jhtcih":"i","b90y9d":"i","x9cs76":"i","1n4y86r":"i","1wmvtz2":"i","1jmvmd3":"i","ty6xvc":"i","bv4mw5":"i","9f6fkv":"i","h2k05o":"i","em565a":"i","sd7ayx":"i","1seja1p":"i","1q5367u":"i","tdp2m2":"i","buakzv":"i","t7cyzh":"i","1qx396m":"i","1ftj3gp":"n","1sfcz0n":"n","2botbt":"n","18qaeka":"n","1tpvuy7":"n","fcdok8":"n","1ruhkb6":"n","fnufsf":"n","1sbke6m":"n","lblmbf":"n","x17kbo":"n","1r9hq1q":"n","1s9dq2j":"n","1q8o81m":"n","19eokef":"n","1i0suja":"n","l10tfn":"n","1d9qc89":"n","7vytu2":"n","16hctk7":"n","gax17f":"n","reh7lw":"n","1ket9fy":"n","86l8te":"n","121y0na":"n","15ae0in":"n","9s66k2":"n","1wtajff":"p25","1g57e4t":"p18","1s4bo3h":"p18","17a5e1f":"p18","147zoc6":"p18","19w40v9":"p18","11tlz1p":"p18","1gb01c0":"p30","1g66bkg":"p20","v3j033":"p20","1qqckos":"p20","15w21jz":"p20","j6dga2":"p25","1dqidee":"p25","b2ckbu":"p25","1ia9yjq":"p22","3zaoa1":"p22","1ueefr4":"p22","zt34p9":"p22","xviiuc":"p22","cyma95":"p22","16va6l7":"p18","l5la5p":"p18","ob6vfu":"p22","1229tf1":"p22","unidru":"p12","1rp1dgp":"p16","1lr53wz":"p12","1jvqflj":"p22","ga1os6":"p24","qnpgbh":"p22","d24hga":"p20","k5iwxv":"p20","1a7ac0n":"p14","jeghjm":"p20","lmm2vy":"p18","3kzrpb":"p18","7qtt3w":"p18","8p43om":"p16"};
   function hx(s) { s = "uec|" + s; var x = 0x811c9dc5; for (var i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; } return x.toString(36); }
   function look(s) { return T[hx(s)] || null; }
+  /* Scanner v2: reads word forms, typos, stretched words, intensifiers, negation and context. */
+  var NEG_WINDOW = 3;
+  var STEMS = [["'s", ""], ["ies", "y"], ["es", ""], ["s", ""], ["ily", "y"], ["ly", ""], ["ness", ""], ["ed", ""], ["ed", "e"], ["ing", ""], ["ing", "e"], ["ers", ""], ["er", ""]];
+  var AB = "abcdefghijklmnopqrstuvwxyz";
+  function typoMatch(w) {
+    var i, j, c, x;
+    function hit(s) { c = look(s); if (c && (c.charAt(0) === "b" || c.charAt(0) === "r")) { x = s; return true; } return false; }
+    for (i = 0; i < w.length; i++) if (hit(w.slice(0, i) + w.slice(i + 1))) return [c, x];
+    for (i = 0; i < w.length - 1; i++) if (hit(w.slice(0, i) + w.charAt(i + 1) + w.charAt(i) + w.slice(i + 2))) return [c, x];
+    for (i = 0; i < w.length; i++) for (j = 0; j < 26; j++) if (AB.charAt(j) !== w.charAt(i) && hit(w.slice(0, i) + AB.charAt(j) + w.slice(i + 1))) return [c, x];
+    for (i = 0; i <= w.length; i++) for (j = 0; j < 26; j++) if (hit(w.slice(0, i) + AB.charAt(j) + w.slice(i))) return [c, x];
+    return null;
+  }
+  // Returns [code, baseWord, credit, how] or null.
+  function findWord(w) {
+    var c = look(w);
+    if (c) return [c, w, 1, null];
+    var tries = [w.replace(/(.)\1{2,}/g, "$1$1"), w.replace(/(.)\1+/g, "$1")];
+    for (var i = 0; i < tries.length; i++) if (tries[i] !== w && (c = look(tries[i]))) return [c, tries[i], 1, "stretched"];
+    for (var j = 0; j < STEMS.length; j++) {
+      var a = STEMS[j][0];
+      if (w.length > a.length + 2 && w.slice(-a.length) === a) {
+        var b = w.slice(0, -a.length) + STEMS[j][1];
+        c = look(b);
+        if (c && "bhr".indexOf(c.charAt(0)) >= 0) return [c, b, 0.8, null];
+      }
+    }
+    if (w.length >= 6 && /^[a-z]+$/.test(w)) { var t = typoMatch(w); if (t) return [t[0], t[1], 0.5, "typo"]; }
+    return null;
+  }
   function sentenceKey(s) {
     var ws = String(s).toLowerCase().replace(/’/g, "'").match(/[a-z0-9']+/g) || [];
     var u = {}; ws.forEach(function (w) { u[w] = 1; });
@@ -570,38 +601,81 @@ tr.you td { background: rgba(245,196,81,.08); }
   }
   function scoreSentence(raw, used, oppName) {
     var text = String(raw).replace(/\s+/g, " ").trim().slice(0, 200);
-    var norm = text.replace(/’/g, "'");
-    var lower = norm.toLowerCase();
-    var words = lower.match(/[a-z0-9']+/g) || [];
-    var base = 0, hasSelf = false, hasBrag = false, roast = 0, roastUsed = false, bragUsed = false, here = {}, notes = [];
+    var lower = text.replace(/’/g, "'").toLowerCase();
+    var tokens = lower.match(/[a-z0-9']+|[.,;:!?]/g) || [];
+    var words = tokens.filter(function (t) { return /[a-z0-9]/.test(t); });
     var targeted = /\b(you|your|yours|you're|youre|ur|u|rival|opponent)\b/.test(lower) ||
       (!!oppName && lower.indexOf(oppName.toLowerCase()) >= 0);
-    words.forEach(function (w) {
-      if (here[w]) return; here[w] = 1;
-      var c = look(w); if (!c) return;
-      var k = c.charAt(0), v = +c.slice(1) * 100;
-      if (k === "s") hasSelf = true;
-      else if (k === "r") { if (!targeted) return; if (used["r:" + w]) roastUsed = true; else { used["r:" + w] = 1; roast += v; } }
-      else if (k === "h") { if (targeted && (w === "you" || w === "your")) return; base -= v; }
-      else if (k === "b") { if (used[w]) bragUsed = true; else { used[w] = 1; base += v; hasBrag = true; } }
+    var base = 0, hasSelf = false, hasBrag = false, roast = 0, here = {}, f = {};
+    var negAt = -99, intens = [], bragCount = 0, scoring = 0, gib = 0, wi = -1;
+    tokens.forEach(function (tok) {
+      if (!/[a-z0-9]/.test(tok)) { negAt = -99; intens = []; return; } // punctuation ends a clause
+      wi++;
+      if (/^[a-z]{5,}$/.test(tok) && (!/[aeiouy]/.test(tok) || /[bcdfghjklmnpqrstvwxz]{5,}/.test(tok))) gib++;
+      var m = findWord(tok);
+      if (!m) return;
+      var c = m[0], key = m[1], k = c.charAt(0), v = +c.slice(1) * 100 * m[2];
+      var negated = wi - negAt <= NEG_WINDOW;
+      if (k === "n") { negAt = wi; return; }
+      if (k === "i") { intens.push(wi); if (intens.length > 2) intens.shift(); return; }
+      if (k === "s") { hasSelf = true; scoring++; return; }
+      if (here[key]) return; here[key] = 1;
+      scoring++;
+      if (m[3]) f[m[3]] = 1;
+      if (k === "r") {
+        if (!targeted) return;
+        if (used["r:" + key]) f.roastUsed = 1; else { used["r:" + key] = 1; roast += v; }
+      } else if (k === "h") {
+        if (targeted && (key === "you" || key === "your")) return; // aiming at the rival isn't humble
+        if (negated) { if (!used["n:" + key]) { used["n:" + key] = 1; base += v; hasBrag = true; f.flip = 1; } }
+        else base -= v;
+      } else if (k === "b") {
+        if (negated) { base -= v / 2; f.neg = 1; return; }
+        if (used[key]) { f.bragUsed = 1; return; }
+        used[key] = 1; bragCount++;
+        var boost = 1 + 0.25 * intens.filter(function (i) { return wi - i <= 2; }).length;
+        if (boost > 1) f.intense = 1;
+        base += v * boost * (bragCount > 6 ? 0.5 : 1);
+        hasBrag = true; intens = [];
+      }
     });
     for (var n = 2; n <= 3; n++) for (var i = 0; i + n <= words.length; i++) {
-      var g = words.slice(i, i + n).join(" "), c = look(g);
-      if (c && c.charAt(0) === "p") { if (used["p:" + g]) bragUsed = true; else { used["p:" + g] = 1; base += +c.slice(1) * 100; hasBrag = true; } }
+      var g = words.slice(i, i + n).join(" "), pc = look(g);
+      if (pc && pc.charAt(0) === "p") {
+        if (used["p:" + g]) f.bragUsed = 1;
+        else { used["p:" + g] = 1; base += +pc.slice(1) * 100; hasBrag = true; scoring++; }
+      }
     }
     if (hasSelf) base += 300;
     if (/dempsey/.test(lower)) {
-      if (/(dempsey is|dempsey's) (the )?(best|greatest|better|king|goat|amazing|legend)/.test(lower) || /(love|respect|admire) dempsey/.test(lower)) { base -= 4000; notes.push("praising Dempsey hurts"); }
+      if (/(dempsey is|dempsey's) (the )?(best|greatest|better|king|goat|amazing|legend)/.test(lower) || /(love|respect|admire) dempsey/.test(lower)) { base -= 4000; f.dempsey = 1; }
       else if (hasSelf && /(better|greater|smarter|bigger|stronger|cooler|beat|than)/.test(lower)) {
-        if (used["d:beat"]) bragUsed = true; else { used["d:beat"] = 1; base += 8000; hasBrag = true; }
+        if (used["d:beat"]) f.bragUsed = 1; else { used["d:beat"] = 1; base += 8000; hasBrag = true; }
       }
     }
+    // Praising your rival instead of yourself backfires.
+    if (targeted && !hasSelf && base > 0 && roast === 0) { base = -Math.round(base / 2); hasBrag = false; f.compliment = 1; }
     var pts = base;
     if (hasSelf && hasBrag && pts > 0) pts *= 2;
-    pts = Math.max(-20000, Math.min(LINE_MAX, Math.round(pts)));
-    roast = Math.min(ROAST_CAP, roast);
-    if (bragUsed) notes.push("some brags were already used this match");
-    if (roastUsed) notes.push("that insult was already used");
+    var ratio = words.length ? scoring / words.length : 0;
+    if (pts > 0 && words.length >= 6 && ratio <= 0.5) { pts *= 1.25; f.well = 1; }
+    else if (pts > 0 && words.length >= 5 && ratio >= 0.75) { pts *= 0.4; f.salad = 1; }
+    if (pts > 0 && gib >= 2) { pts *= 0.5; f.gib = 1; }
+    pts = Math.max(-20000, Math.min(LINE_MAX, Math.round(pts / 10) * 10));
+    roast = Math.min(ROAST_CAP, Math.round(roast / 10) * 10);
+    var notes = [];
+    if (f.well) notes.push("well-written bonus");
+    if (f.intense) notes.push("intensified");
+    if (f.flip) notes.push("denying a weakness is a flex");
+    if (f.typo) notes.push("typo forgiven, half credit");
+    if (f.stretched) notes.push("read past the stretching");
+    if (f.neg) notes.push("“not” turned a brag against you");
+    if (f.compliment) notes.push("complimenting your rival backfired");
+    if (f.salad) notes.push("word salad: write a real sentence");
+    if (f.gib) notes.push("nonsense penalty");
+    if (f.dempsey) notes.push("praising Dempsey hurts");
+    if (f.bragUsed) notes.push("some brags were already used this match");
+    if (f.roastUsed) notes.push("that insult was already used");
     if (roast > 0 && !oppName) { notes.push("no rival to roast in practice"); roast = 0; }
     if (roast > 0) notes.push("roasted " + oppName + " −" + fmt(roast));
     return { text: text, pts: pts, roast: roast, notes: notes };
@@ -1056,8 +1130,10 @@ tr.you td { background: rgba(245,196,81,.08); }
     var r = scoreSentence(text, m.used, m.online ? m.oppInfo.name : null);
     m.my = Math.max(0, m.my + r.pts);
     m.mine.push(r);
-    if (m.online) m.sent = (m.sent || 0) + 1;
-    pub(BASE + "/match/" + m.mid + "/" + acct.uid, { type: "line", text: r.text, pts: r.pts, total: m.my, roast: r.roast, ts: now, n: m.sent }, false, 1);
+    if (m.online) {
+      m.sent = (m.sent || 0) + 1;
+      pub(BASE + "/match/" + m.mid + "/" + acct.uid, { type: "line", text: r.text, pts: r.pts, total: m.my, roast: r.roast, ts: now, n: m.sent }, false, 1);
+    }
     if (r.roast > 0) { toast("Roasted " + m.oppInfo.name + " for −" + fmt(r.roast) + "!"); popup($("oppScore"), -r.roast); }
     popup($("egoInput"), r.pts);
     renderMatch(1);
