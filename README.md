@@ -15,6 +15,7 @@ An online bragging battle. Type sentences about yourself; the scanner rates each
 - **Secret scoring:** the word list is stored as hashes, so it can't be read from the page.
 - **No shortcuts:** punctuation and caps earn nothing extra, one sentence every 2 seconds, no pasting, no repeated sentences, and every brag word only counts once per match.
 - **Roasts:** aim an insult at your rival ("you", "your", or their name) and they lose points.
+- **No playing yourself:** accounts used on the same browser are never matched together. Wins only raise your rating when the loser played for real (at least 3 sentences, didn't quit in the first minute) and isn't brand new (3+ games and a day old). Mods see a warning on profiles that look like alt accounts.
 - **Anti-cheat:** a rival's score can only grow by what one sentence can earn, impossible records are hidden, banned players are blocked, matches where nobody brags don't count, and only 3 matches per rival per day affect rating.
 - **Practice solo** works without an account and doesn't change your rating.
 

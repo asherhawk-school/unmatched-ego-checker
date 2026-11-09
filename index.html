@@ -380,6 +380,7 @@ tr.you td { background: rgba(245,196,81,.08); }
             <li>Roast your rival (aim an insult at "you" or their name) to knock their score down.</li>
             <li>Humble talk costs you points.</li>
             <li>Ratings start at 1,000 and climb slowly: up to 20 points a match for your first 10 games, then up to 12. Only your first 3 matches against the same rival each day count.</li>
+            <li>You can't be matched with accounts that were used on your own device, and wins only count against active players who aren't brand new.</li>
             <li>Click any player's name to see their profile.</li>
           </ul>
         </details>
@@ -520,6 +521,7 @@ tr.you td { background: rgba(245,196,81,.08); }
         <label class="cap" for="modKeyIn">Mod key (needed once on this device)</label>
         <input id="modKeyIn" type="password" autocomplete="off" spellcheck="false">
       </div>
+      <p class="hint" id="altInfo"></p>
       <button class="btn-line" type="button" id="banBtn">Ban player</button>
       <p class="hint" id="modMsg">Banning deletes their account, rating and match history. They can still make a new account.</p>
     </div>
@@ -848,7 +850,7 @@ tr.you td { background: rgba(245,196,81,.08); }
 
   function signIn(rec, stats) {
     acct = { uid: rec.uid, name: rec.name, lower: rec.name.toLowerCase() };
-    lsSet(LKEY, acct);
+    lsSet(LKEY, acct); noteSeen(acct.uid);
     var cached = lsGet(statsKey(acct.uid)), remote = rawRanked[acct.uid];
     me = stats || cached || freshStats();
     if (remote && remote.games > (me.games || 0)) me = Object.assign(freshStats(), remote, { vs: (cached && cached.vs) || {} });
@@ -871,6 +873,42 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (msg) toast(msg);
   }
 
+  /* ---------- Device identity (stops playing yourself) ---------- */
+  var DEV_KEY = "uec-device"; // shared by every login slot in this browser
+  function readCookie(n) { var mm = document.cookie.match(new RegExp("(?:^|; )" + n + "=([a-z0-9]+)")); return mm ? mm[1] : null; }
+  var DEV = (function () {
+    var v = null; try { v = localStorage.getItem(DEV_KEY); } catch (e) {}
+    v = v || readCookie("uecdev") || (rid() + rid());
+    try { localStorage.setItem(DEV_KEY, v); } catch (e) {}
+    try { document.cookie = "uecdev=" + v + "; max-age=315360000; path=/; SameSite=Lax"; } catch (e) {}
+    return v;
+  })();
+  var myDv = "", myFp = "", myFm = "";
+  async function sha(x) { return hexOf(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(x))).slice(0, 16); }
+  function canvasPrint() {
+    try { var c = document.createElement("canvas"); c.width = 220; c.height = 30; var x = c.getContext("2d"); x.textBaseline = "top"; x.font = "16px Arial"; x.fillStyle = "#f60"; x.fillRect(100, 1, 62, 20); x.fillStyle = "#069"; x.fillText("Unmatched ego ♛ 1.0", 2, 4); return c.toDataURL(); } catch (e) { return ""; }
+  }
+  (async function () {
+    try {
+      var n = navigator, sc = screen;
+      var machine = [sc.width, sc.height, sc.colorDepth, new Date().getTimezoneOffset(), Intl.DateTimeFormat().resolvedOptions().timeZone, n.hardwareConcurrency, n.deviceMemory, n.platform, n.maxTouchPoints, (n.languages || []).join(",")].join("|");
+      myDv = await sha("dev|" + DEV);
+      myFm = await sha("fm|" + machine);
+      myFp = await sha("fp|" + machine + "|" + n.userAgent + "|" + canvasPrint());
+    } catch (e) {}
+  })();
+  var SEEN_KEY = "uec-device-accounts"; // every account that has signed in on this browser
+  function seenHere() { return lsGet(SEEN_KEY) || []; }
+  function noteSeen(uid) { var a = seenHere(); if (a.indexOf(uid) < 0) { a.push(uid); lsSet(SEEN_KEY, a.slice(-50)); } }
+  function sameOwner(uid, info) { return seenHere().indexOf(uid) >= 0 || (!!info && !!info.dv && !!myDv && info.dv === myDv); }
+  var devInfo = {}; // uid -> device hashes they last announced
+  function noteDev(uid, d) { if (d && (d.dv || d.fp)) devInfo[uid] = { dv: String(d.dv || "").slice(0, 16), fp: String(d.fp || "").slice(0, 16), fm: String(d.fm || "").slice(0, 16) }; }
+  function devFields() { return { dv: myDv, fp: myFp, fm: myFm }; }
+  function established(uid) {
+    var rec = byUid[uid], r = ranked[uid];
+    return !!rec && (r ? r.games : 0) >= 3 && Date.now() - (rec.created || 0) >= 86400000;
+  }
+
   /* ---------- Network (free public MQTT broker) ---------- */
   var client = null, connected = false, netState = "connecting";
   var ranked = {}, rawRanked = {}, online = {}, queue = {}, matches = {};
@@ -878,9 +916,9 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (!client || !connected) return;
     try { client.publish(topic, obj == null ? "" : JSON.stringify(obj), { retain: !!retain, qos: qos || 0 }); } catch (e) {}
   }
-  function announce() { if (acct) pub(BASE + "/online/" + acct.uid, { name: acct.name, rating: me.rating, t: Date.now() }, true); }
+  function announce() { if (acct) pub(BASE + "/online/" + acct.uid, Object.assign({ name: acct.name, rating: me.rating, t: Date.now() }, devFields()), true); }
   function pubRanked() {
-    if (acct && me.games > 0) pub(BASE + "/ranked/" + acct.uid, { name: acct.name, rating: me.rating, wins: me.wins, losses: me.losses, draws: me.draws, best: me.best, games: me.games, t: Date.now() }, true, 1);
+    if (acct && me.games > 0) pub(BASE + "/ranked/" + acct.uid, { name: acct.name, rating: me.rating, wins: me.wins, losses: me.losses, draws: me.draws, best: me.best, games: me.games, t: Date.now(), dv: myDv, fp: myFp, fm: myFm }, true, 1);
   }
   function onlineCount() { var n = 0, now = Date.now(); Object.keys(online).forEach(function (k) { if (now - online[k].t < 150000) n++; }); return n; }
   function setNet(s) {
@@ -921,6 +959,7 @@ tr.you td { background: rgba(245,196,81,.08); }
   }
   function reconnect() {
     if (client) { var old = client; client = null; connected = false; try { old.end(true); } catch (e) {} }
+    setNet("connecting");
     connect();
   }
   heartbeat = setInterval(announce, 45000);
@@ -966,7 +1005,7 @@ tr.you td { background: rgba(245,196,81,.08); }
       if (!d) { delete ranked[id]; delete rawRanked[id]; }
       else {
         var r = { rating: num(d.rating, 0, 5000, 1000), wins: num(d.wins, 0, 1e6, 0) | 0, losses: num(d.losses, 0, 1e6, 0) | 0, draws: num(d.draws, 0, 1e6, 0) | 0, best: num(d.best, 0, 1e9, 0), games: num(d.games, 0, 1e6, 0) | 0 };
-        rawRanked[id] = r;
+        rawRanked[id] = r; noteDev(id, d);
         if (r.best <= MAX_BEST && Math.abs(r.rating - 1000) <= 32 * r.games + 1) ranked[id] = r; else delete ranked[id];
       }
       renderBoard();
@@ -976,10 +1015,10 @@ tr.you td { background: rgba(245,196,81,.08); }
         if (match && match.online && match.oppInfo.id === id && (match.phase === "live" || match.phase === "countdown")) {
           match.oppForfeit = true; toast(match.oppInfo.name + " left the match. You win by forfeit."); endRound(false);
         }
-      } else online[id] = { t: num(d.t, 0, 9e15, 0) };
+      } else { online[id] = { t: num(d.t, 0, 9e15, 0) }; noteDev(id, d); }
       setNet(netState);
     } else if (kind === "queue") {
-      if (!d) delete queue[id]; else queue[id] = { rating: num(d.rating, 0, 5000, 1000), t: num(d.t, 0, 9e15, 0) };
+      if (!d) delete queue[id]; else queue[id] = { rating: num(d.rating, 0, 5000, 1000), t: num(d.t, 0, 9e15, 0), dv: String(d.dv || "").slice(0, 16) };
       if (searching) tryPair();
     } else if (kind === "matches") {
       if (d && pendingBest && id === pendingBest.mid && acct) {
@@ -1029,7 +1068,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     showScreen("lobby"); showOverlay("search");
     tryPair();
   }
-  function pubQueue() { pub(BASE + "/queue/" + acct.uid, { rating: me.rating, t: Date.now() }, true); }
+  function pubQueue() { pub(BASE + "/queue/" + acct.uid, { rating: me.rating, t: Date.now(), dv: myDv }, true); }
   function stopSearch() {
     if (!searching) return;
     clearInterval(searching.hb); clearInterval(searching.clock); clearTimeout(searching.pendingT);
@@ -1039,13 +1078,19 @@ tr.you td { background: rgba(245,196,81,.08); }
   function tryPair() {
     if (!searching || searching.pending || !acct) return;
     var now = Date.now();
-    var cands = Object.keys(queue).filter(function (id) { return id !== acct.uid && byUid[id] && acct.uid < id && now - queue[id].t < 45000; })
+    var mineSkipped = false;
+    var cands = Object.keys(queue).filter(function (id) {
+      if (id === acct.uid || !byUid[id] || now - queue[id].t >= 45000) return false;
+      if (sameOwner(id, queue[id]) || sameOwner(id, devInfo[id])) { mineSkipped = true; return false; }
+      return acct.uid < id;
+    })
       .sort(function (a, b) { return Math.abs(queue[a].rating - me.rating) - Math.abs(queue[b].rating - me.rating); });
+    if (mineSkipped && !searching.warned) { searching.warned = true; toast("Skipped an account that was used on this device. You can't play yourself."); }
     if (!cands.length) return;
     var oid = cands[0];
     var mid = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     searching.pending = { mid: mid, oid: oid };
-    pub(BASE + "/inbox/" + oid, { type: "invite", mid: mid, from: acct.uid, rating: me.rating }, false, 1);
+    pub(BASE + "/inbox/" + oid, { type: "invite", mid: mid, from: acct.uid, rating: me.rating, dv: myDv }, false, 1);
     searching.pendingT = setTimeout(function () {
       if (searching && searching.pending && searching.pending.mid === mid) { searching.pending = null; delete queue[oid]; tryPair(); }
     }, 6000);
@@ -1055,9 +1100,14 @@ tr.you td { background: rgba(245,196,81,.08); }
     // Only real accounts, never yourself, never banned players.
     if (!from || !mid || BLOCKED[from] || from === acct.uid || !byUid[from]) return;
     var opp = { id: from, name: byUid[from].name, rating: num(d.rating, 0, 5000, 1000) };
+    var self = sameOwner(from, { dv: String(d.dv || "").slice(0, 16) }) || sameOwner(from, devInfo[from]);
+    if (self && (d.type === "invite" || d.type === "accept")) {
+      pub(BASE + "/inbox/" + from, { type: d.type === "invite" ? "decline" : "cancel", mid: mid, from: acct.uid }, false, 1);
+      return;
+    }
     if (d.type === "invite") {
       var ok = !!searching && !match && !searching.pending;
-      pub(BASE + "/inbox/" + from, { type: ok ? "accept" : "decline", mid: mid, from: acct.uid, rating: me.rating }, false, 1);
+      pub(BASE + "/inbox/" + from, { type: ok ? "accept" : "decline", mid: mid, from: acct.uid, rating: me.rating, dv: myDv }, false, 1);
       if (ok) { stopSearch(); startMatch({ online: true, mid: mid, host: false, oppInfo: opp }); }
     } else if (d.type === "accept") {
       if (searching && searching.pending && searching.pending.mid === mid && searching.pending.oid === from) { stopSearch(); startMatch({ online: true, mid: mid, host: true, oppInfo: opp }); }
@@ -1092,7 +1142,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     showScreen("match"); renderMatch();
     if (o.online) {
       $("countVs").textContent = acct.name + "  vs  " + o.oppInfo.name;
-      countdown(function () { match.phase = "live"; match.endsAt = Date.now() + ROUND_MS; tick(); $("egoInput").focus(); });
+      countdown(function () { if (!match || match.phase !== "countdown") return; match.phase = "live"; match.startedAt = Date.now(); match.endsAt = Date.now() + ROUND_MS; tick(); $("egoInput").focus(); });
     } else { match.phase = "live"; $("egoInput").focus(); }
   }
   function countdown(done) {
@@ -1166,7 +1216,8 @@ tr.you td { background: rgba(245,196,81,.08); }
       m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their);
       renderMatch();
     } else if (d.type === "final") {
-      var missing = Math.max(0, (num(d.n, 0, 500, 0) | 0) - (m.oppLines || 0));
+      m.oppN = num(d.n, 0, 500, 0) | 0;
+      var missing = Math.max(0, m.oppN - (m.oppLines || 0));
       m.their = Math.min(num(d.total, 0, 1e9, m.their), m.their + missing * LINE_MAX); m.oppFinal = m.their;
       if (d.forfeit && m.phase !== "done") {
         m.oppForfeit = true; toast(m.oppInfo.name + " forfeited. You win.");
@@ -1226,9 +1277,15 @@ tr.you td { background: rgba(245,196,81,.08); }
     m.phase = "done"; clearTimeout(m.waitT);
     if (client) client.unsubscribe(BASE + "/match/" + m.mid + "/+");
     var result = m.forfeit ? 0 : m.oppForfeit ? 1 : m.my > m.their ? 1 : m.my < m.their ? 0 : 0.5;
-    // Anti-farming: nobody bragged = no contest; only 3 rated matches per rival per day.
-    var unrated = null;
-    if (!m.mine.some(function (e) { return !e.roasted; }) && !m.theirs.length) unrated = "Nobody bragged, so this match doesn't count.";
+    // Anti-farming. Losses always count; wins and draws only count against a rival who really played.
+    var unrated = null, noContest = false;
+    var early = (m.forfeit || m.oppForfeit) && Date.now() - (m.startedAt || 0) < 60000;
+    var myLines = m.sent || 0, theirLines = Math.max(m.oppLines || 0, m.oppN || 0);
+    if (!m.mine.some(function (e) { return !e.roasted; }) && !m.theirs.length) { unrated = "Nobody bragged, so this match doesn't count."; noContest = true; }
+    else if (result === 1 && early) unrated = "Your rival quit in the first minute, so this win doesn't raise your rating.";
+    else if (result === 1 && theirLines < 3) unrated = "Your rival sent fewer than 3 sentences, so this win doesn't raise your rating.";
+    else if (result === 0.5 && (myLines < 3 || theirLines < 3)) unrated = "Draws only count when both players send at least 3 sentences.";
+    else if (result === 1 && !established(m.oppInfo.id)) unrated = m.oppInfo.name + " is still a new player (under 3 games or a day old), so beating them doesn't raise your rating yet.";
     var dayAgo = Date.now() - 86400000;
     var hist = (me.vs[m.oppInfo.id] || []).filter(function (t) { return t > dayAgo; });
     if (!unrated && hist.length >= SAME_RIVAL_PER_DAY) unrated = "Unrated: you've already played " + m.oppInfo.name + " 3 times today.";
@@ -1241,8 +1298,8 @@ tr.you td { background: rgba(245,196,81,.08); }
       pendingBest = { mid: m.mid, my: Math.min(m.my, MAX_BEST) };
       setTimeout(function () { settleBest(null); }, 15000); // no record (host left): use our own count
       hist.push(Date.now());
-      if (m.host) pub(BASE + "/matches/" + m.mid, { t: Date.now(), a: { id: acct.uid, total: m.my, delta: delta }, b: { id: m.oppInfo.id, total: m.their, delta: -delta } }, true, 1);
     }
+    if (m.host && !noContest) pub(BASE + "/matches/" + m.mid, { t: Date.now(), a: { id: acct.uid, total: m.my, delta: delta }, b: { id: m.oppInfo.id, total: m.their, delta: 0 } }, true, 1);
     me.vs[m.oppInfo.id] = hist;
     saveStats(); pubRanked(); announce();
     showResult({ result: result, delta: delta, unrated: unrated, my: m.my, their: m.their, opp: m.oppInfo, forfeit: m.forfeit, oppForfeit: m.oppForfeit });
@@ -1325,7 +1382,7 @@ tr.you td { background: rgba(245,196,81,.08); }
       var A = h("div", "side a" + (aw ? " won" : "")); A.append(nameBtn(m.a.id, "nm"), h("span", "sc", fmt(m.a.total)));
       var B = h("div", "side b" + (bw ? " won" : "")); B.append(nameBtn(m.b.id, "nm"), h("span", "sc", fmt(m.b.total)));
       var w = aw ? m.a : bw ? m.b : null, wn = aw ? an : bn;
-      var meta = w ? wn + " won · " + (w.delta >= 0 ? "+" : "−") + Math.abs(w.delta) + " rating · " + ago(m.t) : "Draw · " + ago(m.t);
+      var meta = w ? wn + " won · " + ago(m.t) : "Draw · " + ago(m.t);
       li.append(A, h("span", "vs", "vs"), B, h("div", "meta", meta));
       ul.append(li);
     });
@@ -1369,6 +1426,15 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (canMod) {
       $("modKeyRow").hidden = !!lsGet(MODKEY);
       $("banBtn").textContent = "Ban " + rec.name; $("banBtn").classList.remove("armed"); banArm = 0;
+      var di = devInfo[uid], same = [], similar = [];
+      if (di) Object.keys(devInfo).forEach(function (u) {
+        var o = devInfo[u]; if (u === uid || !byUid[u]) return;
+        if ((di.dv && o.dv === di.dv) || (di.fp && o.fp === di.fp)) same.push(byUid[u].name);
+        else if (di.fm && o.fm === di.fm) similar.push(byUid[u].name);
+      });
+      $("altInfo").textContent = same.length ? "\u26A0 Same device as: " + same.join(", ") + ". Likely an alt account." :
+        similar.length ? "Similar computer and time zone as: " + similar.join(", ") + ". Could be an alt, or just the same kind of laptop." :
+        "No other accounts seen on this player's device.";
       $("modMsg").textContent = "Banning deletes their account, rating and match history. They can still make a new account.";
     }
     if ($("profileOv").hidden) profileReturn = document.activeElement;
@@ -1506,6 +1572,7 @@ tr.you td { background: rgba(245,196,81,.08); }
   var saved = lsGet(LKEY);
   if (saved && saved.uid && !BLOCKED[saved.uid]) {
     acct = { uid: safeId(saved.uid), name: cleanName(saved.name), lower: cleanName(saved.name).toLowerCase() };
+    noteSeen(acct.uid);
     me = lsGet(statsKey(acct.uid)) || freshStats(); if (!me.vs) me.vs = {};
     sid = rid(); sessionT = Date.now();
     whenSynced().then(function () {
