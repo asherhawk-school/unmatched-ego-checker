@@ -277,6 +277,8 @@ tr.you td { background: rgba(245,196,81,.08); }
 .who .nm { font-family: var(--display); font-size: 28px; color: var(--pink); line-height: 1.1; overflow-wrap: anywhere; }
 .linkish { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 4px; font-size: 14px; }
 .linkish:hover { color: var(--fg); }
+.grader-note[data-state="failed"] { color: var(--bad); }
+.grader-note[data-state="ready"] { color: var(--good); }
 .notes { grid-column: 1 / -1; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
 /* Profiles */
 .name-btn { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: inherit; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -368,17 +370,16 @@ tr.you td { background: rgba(245,196,81,.08); }
         </div>
 
         <button class="btn-line" id="practiceBtn" type="button">Practice solo</button>
+        <p class="hint grader-note" id="graderNote" data-state="loading">Loading the AI grader…</p>
 
         <details class="rules">
           <summary>How it works</summary>
           <ul>
-            <li>Brag about yourself in full sentences. The scanner decides how impressive each one is. The exact scoring is secret.</li>
-            <li>Every brag word only impresses once per match. Find new ways to show off.</li>
-            <li>No repeats: a sentence that you or your rival already said is rejected.</li>
-            <li>One sentence every 2 seconds. Punctuation and caps don't earn extra points.</li>
-            <li>The scanner understands word forms, typos, stretched words like “sooo”, words like “extremely”, and “not”. Real sentences beat lists of words, and praising your rival backfires.</li>
-            <li>Roast your rival (aim an insult at "you" or their name) to knock their score down.</li>
-            <li>Humble talk costs you points, and made-up gibberish words cost 500 each.</li>
+            <li>A small AI model reads each sentence and rates how egotistical it sounds, from humble to unmatched. No single word is worth points on its own: the meaning of the whole sentence counts.</li>
+            <li>No repeats, judged by meaning: saying an earlier brag in new words scores half, and near-copies of anything said this match are rejected.</li>
+            <li>One sentence every 2 seconds. Very short sentences count less, and made-up gibberish words cost 500 each.</li>
+            <li>Roast your rival (talk to "you" or use their name). The AI judges how harsh it is, and harsher roasts take more of their points.</li>
+            <li>Humble talk and complimenting other people score below zero.</li>
             <li>Ratings start at 1,000 and climb slowly: up to 20 points a match for your first 10 games, then up to 12. Only your first 3 matches against the same rival each day count.</li>
             <li>You can't be matched with accounts that were used on your own device, and wins only count against active players who aren't brand new.</li>
             <li>Click any player's name to see their profile.</li>
@@ -529,6 +530,13 @@ tr.you td { background: rgba(245,196,81,.08); }
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script type="module">
+  // Small language model for grading sentences (loads in the background, cached by the browser).
+  import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
+  env.allowLocalModels = false;
+  window.uecML = { pipeline: pipeline };
+  window.dispatchEvent(new Event("uec-ml"));
+</script>
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script>
 (function () {
@@ -539,7 +547,7 @@ tr.you td { background: rgba(245,196,81,.08); }
   // Rating moves slowly: up to 20 a match while you're new, then up to 12.
   var K_NEW = 20, K_SETTLED = 12, K = K_NEW;
   function kFor(games) { return games < 10 ? K_NEW : K_SETTLED; }
-  var LINE_MAX = 25000, ROAST_CAP = 8000, MAX_BEST = 1000000;
+  var LINE_MAX = 15000, ROAST_CAP = 8000, MAX_BEST = 1000000;
   var COOLDOWN_MS = 2000;
   var PW_ITER = 150000, SAME_RIVAL_PER_DAY = 3;
   // Banned for hacked scores or win farming.
@@ -704,6 +712,123 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (roast > 0 && !oppName) { notes.push("no rival to roast in practice"); roast = 0; }
     if (roast > 0) notes.push("roasted " + oppName + " −" + fmt(roast));
     return { text: text, pts: pts, roast: roast, notes: notes };
+  }
+
+  /* ---------- AI grader: a small language model (MiniLM) running in the browser ----------
+     Each sentence becomes a 384-number "meaning fingerprint". Its score is how far it leans
+     toward the bragging examples below versus the humble/neutral ones, so no single word is
+     worth points on its own. */
+  var GRADER_VER = "uec-grader-v2";
+  var BRAG_MAX = 15000, HUMBLE_MIN = -3000;
+  // Thresholds on the classifier's 0-1 output, tuned on sentences it never trained on.
+  var EGO_FLOOR = 0.4, EGO_TOP = 0.9, EGO_HUMBLE = 0.1;
+  var ROAST_FLOOR = 0.5, ROAST_TOP = 0.9;
+  var SIM_REJECT = 0.92, SIM_SIMILAR = 0.72;
+  var EGO_POS = ["I am the greatest person who has ever lived.", "Everyone in this room knows I'm better than them.", "I'm smarter than every teacher in this school.", "Honestly, nobody comes close to my level.", "I win at everything I try, every single time.", "My talent is on a completely different level from yours.", "People should feel lucky they get to stand near me.", "I'm the main character and everyone else is an extra.", "I was born to be famous and adored by millions.", "There has never been anyone as impressive as me.", "I could beat anyone here without even trying.", "My brain works faster than a supercomputer.", "I'm the best player this game will ever see.", "The whole world revolves around me.", "I'm too good for this place, honestly.", "Every room I walk into gets better because I'm in it.", "I am a once in a generation talent.", "My looks, my brains and my skills are all perfect.", "They will build statues of me one day.", "I deserve all the trophies, all the credit and all the attention.", "Nobody can match how incredible I am.", "I'm the reason my team ever wins anything.", "I am clearly superior to everyone I meet.", "I'm basically a celebrity at my school.", "Even my mistakes are better than other people's best work.", "I have never lost an argument in my life.", "I'm so good at sports that coaches beg me to join.", "History books will be written about me.", "I'm the coolest, richest and smartest person here.", "When I talk, everyone should listen.", "My ego is massive and fully earned.", "I make everything look easy because I'm that good.", "I am better than Dempsey in every possible way.", "Teachers learn more from me than I learn from them.", "I got every answer right because I always do.", "I'm the most important person in any group chat.", "Honestly I carry this whole school on my back.", "I am flawless and I know it.", "Being this amazing is exhausting but someone has to do it.", "My name will be remembered forever.", "I could do this with my eyes closed.", "Kneel before your champion.", "Bow down, the king has arrived.", "I'm the best thing that ever happened to this town.", "Everyone secretly wants to be me.", "My skills make professionals look like beginners.", "I'm on a level none of you will ever reach.", "Without me this whole school would fall apart.", "I'm built different from the rest of you.", "Winning is easy when you're as gifted as I am.", "I'm the smartest kid my teachers have ever had.", "My greatness speaks for itself.", "I outshine everyone without even trying.", "I'm too talented to lose to anyone here.", "The trophies just keep coming because I'm that good.", "Let's be honest, I'm the best looking person in this class.", "My brain is a masterpiece.", "I'm unstoppable and everyone knows it.", "I never miss, I never fail, I never lose.", "Peasants like you could never understand my genius.", "They should name a holiday after me.", "I'm the gold standard everyone else is measured against.", "Even Dempsey takes notes when I talk.", "I'm an icon, a legend, a once in a lifetime star.", "I'm so good it's actually unfair to everyone else.", "None of you could ever keep up with me.", "My jump shot is better than anyone's in the NBA.", "I'm way smarter than Dempsey will ever be.", "My intelligence is off the charts.", "I'm better than all of you combined.", "Nobody here is even in my league.", "I was the best at everything since I was born."];
+  var EGO_NEG = ["I'm still learning and I make plenty of mistakes.", "I think I could probably do better next time.", "Thank you so much for helping me with this.", "I'm not very good at this game yet.", "Sorry, that was my fault.", "I went to the store and bought some milk.", "The weather is nice today.", "I had cereal for breakfast this morning.", "My dog likes to sleep on the couch.", "We worked together as a team and it went okay.", "You are amazing and so talented.", "You are definitely smarter than me.", "Everyone did a great job today, not just me.", "I'm an average student with average grades.", "I lost the game but it was still fun.", "I need to practice a lot more.", "Maybe I'm wrong about this.", "I'm nervous about the test tomorrow.", "My friend is way better at math than I am.", "Can someone help me with my homework?", "I like playing video games after school.", "The bus was late again this morning.", "I'm grateful for my family and friends.", "I don't think I'm special at all.", "I'm pretty normal, nothing impressive about me.", "Our teacher explained the lesson really well.", "I tried my best but I failed.", "She is the best singer I have ever heard.", "He won the race and deserved it.", "I'm sorry if I sounded rude earlier.", "There are a lot of people smarter than me.", "I have homework due on Friday.", "What time does the movie start?", "I sometimes feel unsure about myself.", "Dempsey is the best and I respect him.", "The pizza at lunch was cold.", "I'm just a regular kid.", "I watched a show about space last night.", "Good game, you played really well.", "I'm okay at drawing but not great.", "It is raining outside.", "I forgot my water bottle at home.", "Let's all do our part.", "Honestly I don't deserve the credit.", "I am a person.", "I am a student at this school.", "I am a human being who likes music.", "I'm just an average kid.", "I'm not that good honestly.", "I'm probably the worst at this.", "My sister is a genius.", "She is incredible at everything she does.", "My best friend is the smartest person I know.", "You are so talented, I wish I could do that.", "Our coach is a legend.", "That movie was amazing.", "The new phone looks really cool.", "My grandma makes the best cookies.", "I am tired today.", "I am hungry.", "I am going to bed early tonight.", "I live in a small house with my family.", "I'm learning how to play guitar.", "I'm bad at math but I'm trying.", "Everyone is better than me at this.", "I'm happy for whoever wins.", "The king in the story was very kind.", "Lions are the kings of the jungle.", "Messi is the greatest soccer player ever.", "The best part of my day was lunch.", "I am wearing a blue shirt.", "My team did all the hard work, not me.", "I don't really know what I'm doing.", "I just want everyone to have fun.", "My dad is the strongest man I know.", "My mom is the smartest person in the world.", "My brother is amazing at basketball.", "That player is the greatest of all time.", "genius legend king god goat champion", "flawless supreme invincible godlike overlord", "best best best best", "king king king", "legend icon star winner", "amazing incredible awesome perfect", "smart strong rich famous", "goat goat goat goat", "the best the greatest the king", "superior elite unstoppable"];
+  var ROAST_POS = ["You are a total clown.", "Your sentences are boring and so are you.", "You couldn't win a game against a toaster.", "Nobody likes you and your jokes are terrible.", "You're the weakest player I have ever seen.", "Your brain must be running on low battery.", "You're a background character in my story.", "Honestly you are embarrassing yourself right now.", "You type like a confused grandma.", "Your ego is fake and everyone can tell.", "You should just quit now and save yourself.", "You are so mid it hurts.", "Even a bot would beat you.", "You are a loser and you always will be.", "Your best is worse than my worst.", "You're slow, sloppy and clueless.", "You have the personality of a wet sock.", "Nobody remembers your name.", "You are a fraud and a wannabe.", "Your bragging is pathetic.", "You smell like defeat.", "You are going to lose so badly.", "Your rizz is at absolute zero.", "You're a joke, man.", "Go cry to your mom after this loss.", "Your whole vibe is cringe.", "You couldn't roast a marshmallow.", "You are absolutely trash at this.", "You're a total peasant compared to me.", "Your score is embarrassing.", "You have zero talent.", "Imagine being as bad as you.", "You're a nobody.", "Your brain is empty.", "You smell bad and you play worse."];
+  var ROAST_NEG = ["You are really good at this.", "Good luck, you've got this.", "You played well, nice game.", "Are you ready to start?", "Thank you for playing with me.", "Your sentences are really creative.", "You are a kind person.", "I am the greatest of all time.", "I'm smarter than everyone here.", "Do you like pizza?", "You can go first if you want.", "Have a nice day.", "I think you will win this.", "Your score is pretty impressive.", "You and I should team up.", "I'm a legend and everyone knows it.", "See you after school.", "You're my best friend.", "I respect you a lot.", "You have a great sense of humor.", "Hello, how are you?", "You're doing amazing.", "My talent is unmatched.", "What did you have for lunch?", "You make a good point.", "I'm the best player this game will ever see.", "You are so talented.", "You did great.", "Good game to you.", "You are funny.", "I'm not that good honestly.", "I'm probably the worst at this.", "I ate a sandwich.", "I'm just average.", "I make a lot of mistakes.", "The test was hard.", "My dad is the strongest man I know.", "You are my friend."];
+  var grader = { state: "loading", pct: 0, embed: null };
+  function dot(a, b) { var s = 0; for (var i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+  function meanVec(vs) { var m = []; for (var i = 0; i < vs[0].length; i++) { var t = 0; for (var j = 0; j < vs.length; j++) t += vs[j][i]; m.push(t / vs.length); } return m; }
+  function subVec(a, b) { return a.map(function (x, i) { return x - b[i]; }); }
+  function avg(xs) { return xs.reduce(function (s, x) { return s + x; }, 0) / xs.length; }
+  function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+  function mlLib() {
+    return new Promise(function (res, rej) {
+      if (window.uecML) return res(window.uecML);
+      window.addEventListener("uec-ml", function () { res(window.uecML); }, { once: true });
+      setTimeout(function () { rej(new Error("timeout")); }, 60000);
+    });
+  }
+  async function embedMany(ext, texts) {
+    var out = await ext(texts, { pooling: "mean", normalize: true });
+    var d = out.data, n = texts.length, dim = d.length / n, r = [];
+    for (var i = 0; i < n; i++) r.push(Array.prototype.slice.call(d, i * dim, (i + 1) * dim));
+    return r;
+  }
+  async function loadGrader() {
+    try {
+      var ml = await mlLib();
+      var ext = await ml.pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
+        progress_callback: function (p) { if (p && p.status === "progress" && /onnx/.test(p.file || "")) { grader.pct = Math.round(p.progress || 0); renderGrader(); } }
+      });
+      grader.embed = async function (t) { return (await embedMany(ext, [t]))[0]; };
+      var c = lsGet(GRADER_VER);
+      if (!c || !c.ego || c.ego.length !== 384 || typeof c.egoB !== "number") {
+        var ep = await embedMany(ext, EGO_POS), en = await embedMany(ext, EGO_NEG);
+        var rp = await embedMany(ext, ROAST_POS), rn = await embedMany(ext, ROAST_NEG);
+        var ego = trainClassifier(ep, en), roast = trainClassifier(rp, rn);
+        c = { ego: ego.w, egoB: ego.b, roast: roast.w, roastB: roast.b };
+        lsSet(GRADER_VER, c);
+      }
+      Object.assign(grader, c, { state: "ready" });
+    } catch (e) { grader.state = "failed"; }
+    renderGrader();
+  }
+  // A tiny logistic-regression classifier on top of the sentence fingerprints (trained once, then cached).
+  function trainClassifier(pos, neg) {
+    var X = pos.concat(neg), y = pos.map(function () { return 1; }).concat(neg.map(function () { return 0; }));
+    var d = X[0].length, w = new Array(d).fill(0), b = 0, lam = 0.001, rate = 4;
+    for (var it = 0; it < 1500; it++) {
+      var gw = new Array(d).fill(0), gb = 0;
+      for (var i = 0; i < X.length; i++) {
+        var err = 1 / (1 + Math.exp(-(dot(w, X[i]) + b))) - y[i];
+        for (var j = 0; j < d; j++) gw[j] += err * X[i][j];
+        gb += err;
+      }
+      for (var j2 = 0; j2 < d; j2++) w[j2] -= rate * (gw[j2] / X.length + lam * w[j2]);
+      b -= rate * gb / X.length;
+    }
+    return { w: w, b: b };
+  }
+  function egoLevel(e) { return 1 / (1 + Math.exp(-(dot(e, grader.ego) + grader.egoB))); }
+  function roastLevel(e) { return 1 / (1 + Math.exp(-(dot(e, grader.roast) + grader.roastB))); }
+  function renderGrader() {
+    var el = $("graderNote"); if (!el) return;
+    el.dataset.state = grader.state;
+    el.textContent = grader.state === "ready" ? "AI grader ready." :
+      grader.state === "failed" ? "The AI grader couldn't load on this device, so ranked is unavailable here. Practice uses the quick word scanner." :
+      "Loading the AI grader" + (grader.pct ? " (" + grader.pct + "%)" : "") + "… Ranked opens when it's ready.";
+    setNet(netState);
+  }
+  // Grades one sentence. Returns { reject } for near-copies, otherwise { text, pts, roast, notes }.
+  async function gradeSentence(raw, m, oppName) {
+    var text = String(raw).replace(/\s+/g, " ").trim().slice(0, 200);
+    var lower = text.replace(/’/g, "'").toLowerCase();
+    var words = lower.match(/[a-z0-9']+/g) || [];
+    var e = await grader.embed(text);
+    var sim = 0;
+    (m.embs || []).forEach(function (p) { sim = Math.max(sim, dot(e, p)); });
+    if (sim >= SIM_REJECT) return { reject: "That's basically something already said this match. Brag about something new." };
+    var z = egoLevel(e), notes = [], pts;
+    if (z >= EGO_FLOOR) pts = BRAG_MAX * Math.pow(clamp01((z - EGO_FLOOR) / (EGO_TOP - EGO_FLOOR)), 1.3);
+    else if (z <= EGO_HUMBLE) pts = 0.5 * HUMBLE_MIN * clamp01((EGO_HUMBLE - z) / EGO_HUMBLE);
+    else pts = 0;
+    notes.push("AI ego rating " + Math.round(z * 100) + "/100");
+    if (pts > 0 && words.length < 4) { pts *= 0.6; notes.push("short, so it counts less"); }
+    if (pts > 0 && sim >= SIM_SIMILAR) { pts *= 0.5; notes.push("too close to an earlier brag"); }
+    var gib = 0;
+    words.forEach(function (w) { if (w !== "dempsey" && !(oppName && w === oppName.toLowerCase()) && gibberish(w)) gib++; });
+    if (gib) {
+      if (gib / Math.max(1, words.length) >= 0.3) { pts = Math.min(pts, 0); notes.push("mostly gibberish, so nothing counts"); }
+      pts -= GIB_PENALTY * gib;
+      notes.push("gibberish: −" + fmt(GIB_PENALTY * gib) + " for " + gib + " made-up word" + (gib > 1 ? "s" : ""));
+    }
+    var roast = 0;
+    var targeted = /\b(you|your|yours|you're|youre|ur|u|rival|opponent)\b/.test(lower) || (!!oppName && lower.indexOf(oppName.toLowerCase()) >= 0);
+    if (targeted && !gib) {
+      var rz = roastLevel(e);
+      if (rz >= ROAST_FLOOR) roast = ROAST_CAP * clamp01((rz - ROAST_FLOOR) / (ROAST_TOP - ROAST_FLOOR));
+      if (roast > 0) {
+        pts = Math.max(pts, 0) * 0.5;
+        if (!oppName) { notes.push("no rival to roast in practice"); roast = 0; }
+        else notes.push("roasted " + oppName + " −" + fmt(Math.round(roast / 10) * 10));
+      }
+    }
+    if (!m.embs) m.embs = [];
+    m.embs.push(e);
+    return { text: text, pts: Math.max(-20000, Math.min(LINE_MAX, Math.round(pts / 10) * 10)), roast: Math.min(ROAST_CAP, Math.round(roast / 10) * 10), notes: notes };
   }
 
   /* ---------- UI helpers ---------- */
@@ -948,8 +1073,8 @@ tr.you td { background: rgba(245,196,81,.08); }
     netState = s;
     $("netPill").dataset.state = s;
     $("netText").textContent = s === "online" ? "Online · " + onlineCount() + " signed in" : s === "connecting" ? "Connecting…" : "Offline · practice only";
-    $("findBtn").disabled = s !== "online" || !acct;
-    $("againBtn").disabled = s !== "online" || !acct;
+    $("findBtn").disabled = s !== "online" || !acct || grader.state !== "ready";
+    $("againBtn").disabled = s !== "online" || !acct || grader.state !== "ready";
     $("searchOnline").textContent = onlineCount();
   }
   var heartbeat = null;
@@ -1082,6 +1207,7 @@ tr.you td { background: rgba(245,196,81,.08); }
   function findMatch() {
     if (!acct) { toast("Sign in or create an account to play ranked."); showScreen("lobby"); $("authName").focus(); return; }
     if (!connected) { toast("Can't reach the game server right now. Practice solo while it reconnects."); return; }
+    if (grader.state !== "ready") { toast(grader.state === "failed" ? "Ranked needs the AI grader, and it couldn't load on this device." : "The AI grader is still loading. Try again in a moment."); return; }
     if (searching || match) return;
     searching = { since: Date.now(), pending: null };
     pubQueue();
@@ -1191,16 +1317,27 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (left <= 0) { endRound(false); return; }
     match.tickT = setTimeout(tick, 200);
   }
-  function submitText(text) {
+  async function submitText(text) {
     var m = match;
-    if (!m || m.phase !== "live") return;
+    if (!m || m.phase !== "live" || m.busy) return false;
     var now = Date.now();
     if (now - m.lastSend < COOLDOWN_MS) { toast("Slow down. One brag every 2 seconds."); return false; }
     var key = sentenceKey(text);
     if (key.split(" ").length < 2) { toast("Use a full sentence."); return false; }
     if (m.keys[key]) { toast("Already said. No repeats, so brag about something new."); return false; }
+    var oppName = m.online ? m.oppInfo.name : null, r;
+    if (grader.state === "ready") {
+      m.busy = true; $("sendBtn").textContent = "Grading\u2026";
+      try { r = await gradeSentence(text, m, oppName); } catch (e) { r = { reject: "The grader hiccuped. Try that again." }; }
+      m.busy = false; $("sendBtn").textContent = "Scan it";
+      if (match !== m || m.phase !== "live") return false;
+      if (r.reject) { toast(r.reject); return false; }
+    } else {
+      r = scoreSentence(text, m.used, oppName);
+      r.notes.unshift("quick scanner (AI grader still loading)");
+    }
+    now = Date.now();
     m.keys[key] = 1; m.lastSend = now;
-    var r = scoreSentence(text, m.used, m.online ? m.oppInfo.name : null);
     m.my = Math.max(0, m.my + r.pts);
     m.mine.push(r);
     if (m.online) {
@@ -1224,6 +1361,7 @@ tr.you td { background: rgba(245,196,81,.08); }
       m.oppLines = (m.oppLines || 0) + 1;
       var dmg = num(d.roast, 0, ROAST_CAP, 0) | 0;
       m.theirs.push({ text: text, pts: pts, roast: dmg });
+      if (grader.state === "ready") grader.embed(text).then(function (e) { if (match === m) (m.embs = m.embs || []).push(e); }).catch(function () {});
       m.keys[sentenceKey(text)] = 1;
       m.their = Math.min(num(d.total, 0, 1e9, m.their), Math.max(0, m.their + pts));
       if (dmg > 0 && m.phase !== "done" && m.phase !== "waiting") {
@@ -1572,7 +1710,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     ev.preventDefault();
     var v = $("egoInput").value;
     if (!v.trim()) return;
-    if (submitText(v)) $("egoInput").value = "";
+    submitText(v).then(function (ok) { if (ok && $("egoInput").value === v) $("egoInput").value = ""; });
   });
   $("egoInput").addEventListener("keydown", function (ev) {
     if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); $("composeForm").requestSubmit(); }
@@ -1609,6 +1747,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     });
   }
   renderAuth(); renderMe(); renderBoard(); renderFeed(); setNet("connecting");
+  loadGrader();
   connect();
 })();
 </script>
