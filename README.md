@@ -8,6 +8,7 @@ An online bragging battle. Type sentences about yourself; the scanner rates each
 
 - **Accounts:** sign up with a username and password. Names are unique and can't be changed. Each device can create one account. Signing in somewhere new signs you out everywhere else.
 - **Ranked matches:** press *Find ranked match* to be paired with another signed-in player. You can't be matched against yourself.
+- **Ranked 2v2:** press *Ranked 2v2* to queue for a team match. Once 4 players are waiting, teams are split fairly (highest + lowest rated vs. the middle two). Your team score is both teammates' points added up. Roasts hit the rival you name, or the enemy with the most points. If a teammate leaves, their points stay and you keep playing; if the whole enemy team leaves, you win by forfeit. 2v2 uses the same rating, based on each team's average rating. You can't team up with or play against accounts from your own device.
 - **Slow Elo:** ratings start at 1,000 and move up to 20 points a match for your first 10 games, then up to 12.
 - **Profiles:** click any player's name (leaderboard, match feed, or your rival mid-match) to see their rating, record, win rate, best score, status and recent matches.
 - **Moderators:** mods can open a player's profile and ban them. A ban deletes the account, rating and match history (the person can still make a new account). Bans are signed with a private mod key, so they can't be faked.
