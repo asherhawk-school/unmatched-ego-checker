@@ -545,7 +545,7 @@ tr.you td { background: rgba(245,196,81,.08); }
   window.uecML = { pipeline: pipeline };
   window.dispatchEvent(new Event("uec-ml"));
 </script>
-<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js" integrity="sha384-u4uqeACkFcoKl57rBQJHVGDd1pqhW4w8X3WjTu1ZksPdxoLqdt34jpoNkJisE25W" crossorigin="anonymous"></script>
 <script>
 (function () {
   "use strict";
@@ -927,6 +927,34 @@ tr.you td { background: rgba(245,196,81,.08); }
   var accounts = {}, byUid = {};
   var failCount = 0, lockUntil = 0;
 
+  // Account records live on a public relay, so anyone can publish a fake one to take over a name.
+  // Records never change after sign-up, so once this browser has seen a settled record for a name
+  // it keeps it (pins it) and ignores any different record for that name or uid. When a fake one
+  // of your own account shows up, your browser puts the real record back on the relay.
+  var PIN_KEY = "uec-acct-pins", OWN = "uec-own" + SFX, PIN_AFTER = 120000, REPAIR_GAP = 60000;
+  var pins = lsGet(PIN_KEY) || {}, repairedAt = 0;
+  function sameRec(a, b) { return a.uid === b.uid && a.salt === b.salt && a.hash === b.hash && a.iter === b.iter; }
+  function settled(rec) { return Date.now() - rec.created > PIN_AFTER; }
+  function pinRec(lower, rec) {
+    if (!settled(rec) || (pins[lower] && sameRec(pins[lower], rec))) return;
+    pins[lower] = { name: rec.name, uid: rec.uid, salt: rec.salt, hash: rec.hash, iter: rec.iter, created: rec.created };
+    lsSet(PIN_KEY, pins);
+  }
+  function unpin(lower) { if (pins[lower]) { delete pins[lower]; lsSet(PIN_KEY, pins); } }
+  // Only the owner republishes: their password proved which record is real when they signed in.
+  function repairOwn(lower) {
+    var own = lsGet(OWN);
+    if (!acct || acct.lower !== lower || !own || own.uid !== acct.uid || BLOCKED[own.uid]) return;
+    if (Date.now() - repairedAt < REPAIR_GAP) return;
+    repairedAt = Date.now();
+    pub(BASE + "/acct/" + lower, { v: 1, name: own.name, uid: own.uid, salt: own.salt, hash: own.hash, iter: own.iter, created: own.created }, true, 1);
+  }
+  Object.keys(pins).forEach(function (lower) {
+    var r = pins[lower];
+    if (!r || BLOCKED[r.uid] || r.name.toLowerCase() !== lower) { delete pins[lower]; return; }
+    accounts[lower] = r; byUid[r.uid] = r;
+  });
+
   function hexOf(buf) { return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }
   function bytesOf(hex) { var a = new Uint8Array(hex.length / 2); for (var i = 0; i < a.length; i++) a[i] = parseInt(hex.substr(i * 2, 2), 16); return a; }
   async function hashPw(pw, saltHex, iter) {
@@ -955,7 +983,7 @@ tr.you td { background: rgba(245,196,81,.08); }
 
   async function register(name, pw, pw2) {
     if (!/^[A-Za-z0-9_]{3,20}$/.test(name)) throw "Usernames are 3–20 letters, numbers or underscores.";
-    if (pw.length < 6) throw "Use a password with at least 6 characters.";
+    if (pw.length < 8) throw "Use a password with at least 8 characters, and don't reuse one from another site.";
     if (pw !== pw2) throw "The two passwords don't match.";
     if (!(await whenConnected())) throw "Can't reach the game server. Check your connection and try again.";
     if (!(await whenSynced())) throw "The game server is slow right now. Try again in a moment.";
@@ -1003,6 +1031,7 @@ tr.you td { background: rgba(245,196,81,.08); }
   function signIn(rec, stats) {
     acct = { uid: rec.uid, name: rec.name, lower: rec.name.toLowerCase() };
     lsSet(LKEY, acct); noteSeen(acct.uid);
+    lsSet(OWN, { name: rec.name, uid: rec.uid, salt: rec.salt, hash: rec.hash, iter: rec.iter, created: rec.created });
     var cached = lsGet(statsKey(acct.uid)), remote = rawRanked[acct.uid];
     me = stats || cached || freshStats();
     if (remote && remote.games > (me.games || 0)) me = Object.assign(freshStats(), remote, { vs: (cached && cached.vs) || {} });
@@ -1019,7 +1048,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (match && match.online && match.phase !== "done") endRound(true);
     if (acct) pub(BASE + "/online/" + acct.uid, null, true);
     acct = null; me = null; sid = null;
-    lsSet(LKEY, null);
+    lsSet(LKEY, null); lsSet(OWN, null);
     reconnect();
     hideOverlay(); showScreen("lobby"); renderAuth(); renderBoard();
     if (msg) toast(msg);
@@ -1141,10 +1170,16 @@ tr.you td { background: rgba(245,196,81,.08); }
       }
       var rec = { name: cleanName(d.name), uid: safeId(d.uid), salt: String(d.salt || "").replace(/[^0-9a-f]/g, ""), hash: String(d.hash || "").replace(/[^0-9a-f]/g, ""), iter: num(d.iter, 10000, 1000000, PW_ITER) | 0, created: num(d.created, 0, 9e15, 0) };
       if (!rec.uid || rec.name.toLowerCase() !== lower || rec.salt.length !== 32 || rec.hash.length !== 64 || BLOCKED[rec.uid]) return;
-      var prev = accounts[lower];
-      if (prev && prev.uid !== rec.uid && prev.created <= rec.created) return; // first claim keeps the name
+      var prev = accounts[lower], owner = byUid[rec.uid];
+      if (prev && sameRec(prev, rec)) { pinRec(lower, prev); return; }
+      // A settled record never changes, and a uid never moves to another name: anything else is forged.
+      if (prev && (pins[lower] || settled(prev))) { repairOwn(lower); return; }
+      if (owner && owner !== prev) return;
+      if (prev && prev.uid !== rec.uid && prev.created <= rec.created) return; // sign-up race: first claim keeps the name
+      if (prev && prev.uid === rec.uid) return; // same account, different password: forged
       if (prev) delete byUid[prev.uid];
       accounts[lower] = rec; byUid[rec.uid] = rec;
+      pinRec(lower, rec);
       if (synced) renderBoard();
       return;
     }
@@ -1935,7 +1970,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     var first = !BLOCKED[uid];
     BLOCKED[uid] = 1;
     var rec = byUid[uid];
-    if (rec) { delete accounts[rec.name.toLowerCase()]; delete byUid[uid]; }
+    if (rec) { unpin(rec.name.toLowerCase()); delete accounts[rec.name.toLowerCase()]; delete byUid[uid]; }
     delete ranked[uid]; delete rawRanked[uid]; delete online[uid]; delete queue[uid]; delete queue2[uid];
     Object.keys(matches).forEach(function (k) { if (involves(matches[k], uid)) delete matches[k]; });
     if (match && match.mode === 2) { if (match.roster.indexOf(uid) >= 0) playerLeft(uid, " was banned"); }
@@ -2035,6 +2070,8 @@ tr.you td { background: rgba(245,196,81,.08); }
   if (saved && saved.uid && !BLOCKED[saved.uid]) {
     acct = { uid: safeId(saved.uid), name: cleanName(saved.name), lower: cleanName(saved.name).toLowerCase() };
     noteSeen(acct.uid);
+    var pinned = pins[acct.lower];
+    if (!lsGet(OWN) && pinned && pinned.uid === acct.uid) lsSet(OWN, pinned);
     me = lsGet(statsKey(acct.uid)) || freshStats(); if (!me.vs) me.vs = {};
     sid = rid(); sessionT = Date.now();
     whenSynced().then(function () {

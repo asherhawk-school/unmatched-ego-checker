@@ -27,4 +27,9 @@ One static `index.html`. The AI grader uses [Transformers.js](https://github.com
 
 Because the broker is public and there's no game server, this is not bank-grade security: a skilled attacker could still tamper with data. It's built to stop casual cheating and to make hacks easy to clean up.
 
+What that means for accounts:
+
+- Anyone can read every account's salt and password hash from the broker and try to guess passwords offline, so use a password you don't use anywhere else.
+- Anyone can publish a fake account record. Once your browser has seen an account it remembers the real one and ignores fakes, and if a fake of your own account shows up while you're signed in, your browser puts the real one back. A browser that has never seen the real record can still be fooled, which only a real server can fully fix.
+
 Tip: add `?p=2` to the URL to use a second, separate login in the same browser (handy for testing).
