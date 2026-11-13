@@ -931,6 +931,7 @@ tr.you td { background: rgba(245,196,81,.08); }
   // Records never change after sign-up, so once this browser has seen a settled record for a name
   // it keeps it (pins it) and ignores any different record for that name or uid. When a fake one
   // of your own account shows up, your browser puts the real record back on the relay.
+  var LEFT_GRACE = 6000;
   var PIN_KEY = "uec-acct-pins", OWN = "uec-own" + SFX, PIN_AFTER = 120000, REPAIR_GAP = 60000;
   var pins = lsGet(PIN_KEY) || {}, repairedAt = 0;
   function sameRec(a, b) { return a.uid === b.uid && a.salt === b.salt && a.hash === b.hash && a.iter === b.iter; }
@@ -941,6 +942,28 @@ tr.you td { background: rgba(245,196,81,.08); }
     lsSet(PIN_KEY, pins);
   }
   function unpin(lower) { if (pins[lower]) { delete pins[lower]; lsSet(PIN_KEY, pins); } }
+  // "Signed in somewhere else" notices must carry a code only someone with the password can make,
+  // or anyone could kick a player out mid-match. The key is derived from the password at sign-in.
+  var SKEY = "uec-skey" + SFX, healAt = {};
+  async function sessionKeyHex(pw, salt) {
+    var material = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveBits"]);
+    var bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new TextEncoder().encode("uec-session|" + salt), iterations: PW_ITER }, material, 256);
+    return hexOf(bits);
+  }
+  async function sessionMac(uid, sid, t) {
+    var hex = lsGet(SKEY);
+    if (!hex || typeof hex !== "string") return null;
+    var key = await crypto.subtle.importKey("raw", bytesOf(hex), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    return hexOf(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode("session|" + uid + "|" + sid + "|" + t)));
+  }
+  async function pubSession() {
+    if (!acct) return;
+    var u = acct.uid, mac = await sessionMac(u, sid, sessionT).catch(function () { return null; });
+    if (acct && acct.uid === u) pub(BASE + "/session/" + u, { sid: sid, t: sessionT, mac: mac || undefined }, true, 1);
+  }
+  // Put one of our own records back when someone else overwrote it, at most once per `gap`.
+  function heal(kind, gap, fn) { if (Date.now() - (healAt[kind] || 0) < gap) return; healAt[kind] = Date.now(); fn(); }
+
   // Only the owner republishes: their password proved which record is real when they signed in.
   function repairOwn(lower) {
     var own = lsGet(OWN);
@@ -1008,6 +1031,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     }
     if (old && old.id) pub(BASE + "/online/" + safeId(old.id), null, true);
     lsSet(OLD, null);
+    lsSet(SKEY, await sessionKeyHex(pw, accounts[lower].salt));
     signIn(accounts[lower], stats);
   }
 
@@ -1025,6 +1049,7 @@ tr.you td { background: rgba(245,196,81,.08); }
       throw "Wrong password.";
     }
     failCount = 0;
+    lsSet(SKEY, await sessionKeyHex(pw, rec.salt));
     signIn(rec, null);
   }
 
@@ -1048,7 +1073,7 @@ tr.you td { background: rgba(245,196,81,.08); }
     if (match && match.online && match.phase !== "done") endRound(true);
     if (acct) pub(BASE + "/online/" + acct.uid, null, true);
     acct = null; me = null; sid = null;
-    lsSet(LKEY, null); lsSet(OWN, null);
+    lsSet(LKEY, null); lsSet(OWN, null); lsSet(SKEY, null);
     reconnect();
     hideOverlay(); showScreen("lobby"); renderAuth(); renderBoard();
     if (msg) toast(msg);
@@ -1125,7 +1150,7 @@ tr.you td { background: rgba(245,196,81,.08); }
       var subs = [BASE + "/ban/+", BASE + "/acct/+", BASE + "/ranked/+", BASE + "/online/+", BASE + "/matches/+", BASE + "/queue/+", BASE + "/queue2/+"];
       if (acct) {
         subs.push(BASE + "/inbox/" + acct.uid);
-        pub(BASE + "/session/" + acct.uid, { sid: sid, t: sessionT }, true, 1);
+        pubSession();
         subs.push(BASE + "/session/" + acct.uid);
       }
       if (match && match.online) subs.push(BASE + "/match/" + match.mid + "/+");
@@ -1186,10 +1211,17 @@ tr.you td { background: rgba(245,196,81,.08); }
     id = safeId(id);
     if (BLOCKED[id] || (kind === "match" && BLOCKED[safeId(p[3])])) return;
     if (kind === "session") {
-      if (acct && id === acct.uid && d && d.sid !== sid && num(d.t, 0, 9e15, 0) > sessionT) {
-        signOut("You signed in on another device, so you were signed out here.");
+      if (acct && id === acct.uid && d && d.sid !== sid && num(d.t, 0, 9e15, 0) > sessionT && typeof d.mac === "string") {
+        var who = acct.uid, mySid = sid;
+        // Only sign out if the notice was made with this account's password.
+        sessionMac(who, String(d.sid), d.t).then(function (mac) {
+          if (mac && mac === d.mac && acct && acct.uid === who && sid === mySid) signOut("You signed in on another device, so you were signed out here.");
+        }, function () {});
       }
     } else if (kind === "ranked") {
+      if (acct && id === acct.uid && me && me.games > 0 && (!d || num(d.rating, 0, 5000, -1) !== me.rating || num(d.games, 0, 1e6, -1) !== me.games || num(d.best, 0, 1e9, -1) !== me.best || num(d.wins, 0, 1e6, -1) !== me.wins || num(d.losses, 0, 1e6, -1) !== me.losses)) {
+        heal("ranked", 10000, pubRanked); // only this device's numbers are ours while signed in here
+      }
       if (!d) { delete ranked[id]; delete rawRanked[id]; }
       else {
         var r = { rating: num(d.rating, 0, 5000, 1000), wins: num(d.wins, 0, 1e6, 0) | 0, losses: num(d.losses, 0, 1e6, 0) | 0, draws: num(d.draws, 0, 1e6, 0) | 0, best: num(d.best, 0, 1e9, 0), games: num(d.games, 0, 1e6, 0) | 0 };
@@ -1200,9 +1232,16 @@ tr.you td { background: rgba(245,196,81,.08); }
     } else if (kind === "online") {
       if (!d) {
         delete online[id];
-        if (match && match.mode === 2) { if (match.roster.indexOf(id) >= 0 && id !== acct.uid) playerLeft(id, " left the match"); }
-        else if (match && match.online && match.oppInfo.id === id && (match.phase === "live" || match.phase === "countdown")) {
-          match.oppForfeit = true; toast(match.oppInfo.name + " left the match. You win by forfeit."); endRound(false);
+        if (acct && id === acct.uid) { if (connected) heal("online", 3000, announce); }
+        // Anyone can post "left", so wait a moment: a player who is still here announces themselves again.
+        else if (match && match.mode === 2) {
+          if (match.roster.indexOf(id) >= 0) { var m2 = match; setTimeout(function () { if (match === m2 && !online[id]) playerLeft(id, " left the match"); }, LEFT_GRACE); }
+        } else if (match && match.online && match.oppInfo.id === id && (match.phase === "live" || match.phase === "countdown")) {
+          var m1 = match;
+          setTimeout(function () {
+            if (match !== m1 || online[id] || m1.oppForfeit || (m1.phase !== "live" && m1.phase !== "countdown")) return;
+            m1.oppForfeit = true; toast(m1.oppInfo.name + " left the match. You win by forfeit."); endRound(false);
+          }, LEFT_GRACE);
         }
       } else { online[id] = { t: num(d.t, 0, 9e15, 0) }; noteDev(id, d); }
       setNet(netState);

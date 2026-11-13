@@ -31,5 +31,7 @@ What that means for accounts:
 
 - Anyone can read every account's salt and password hash from the broker and try to guess passwords offline, so use a password you don't use anywhere else.
 - Anyone can publish a fake account record. Once your browser has seen an account it remembers the real one and ignores fakes, and if a fake of your own account shows up while you're signed in, your browser puts the real one back. A browser that has never seen the real record can still be fooled, which only a real server can fully fix.
+- "You signed in somewhere else" notices are signed with a key made from your password, so nobody else can kick you out of a match. (Devices that were already signed in before this change need to sign in once more to get the key.)
+- If someone posts that you went offline, or overwrites your rating record, your browser republishes the real one. A rival is only awarded a forfeit if you are still gone a few seconds later.
 
 Tip: add `?p=2` to the URL to use a second, separate login in the same browser (handy for testing).
